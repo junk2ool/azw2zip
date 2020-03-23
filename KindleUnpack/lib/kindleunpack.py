@@ -15,6 +15,7 @@ import traceback
 from .compatibility_utils import PY2, binary_type, utf8_str, unicode_str
 from .compatibility_utils import unicode_argv, add_cp65001_codec
 from .compatibility_utils import hexlify
+import safefilename
 
 add_cp65001_codec()
 
@@ -154,6 +155,9 @@ SPLIT_COMBO_MOBIS = False
 
 CREATE_COVER_PAGE = True  # XXX experimental
 """ Create and insert a cover xhtml page. """
+
+UPDATED_TITLE = False
+OUTPUT_EPUB = False
 
 EOF_RECORD = b'\xe9\x8e' + b'\r\n'
 """ The EOF record content. """
@@ -326,9 +330,9 @@ def processCRES(i, files, rscnames, sect, data, beg, rsc_ptr, use_hd):
         imgname = rscnames[rsc_ptr]
         imgdest = files.imgdir
     else:
-        imgname = "HDimage%05d.%s" % (i, imgtype)
+        imgname = "HDimage%05d.%s" % (i-beg+1, imgtype)
         imgdest = files.hdimgdir
-    print("Extracting HD image: {0:s} from section {1:d}".format(imgname,i))
+    print("Extracting HD image: {0:s} from section {1:d}".format(imgname,i-beg+1))
     outimg = os.path.join(imgdest, imgname)
     with open(pathof(outimg), 'wb') as f:
         f.write(data)
@@ -409,10 +413,10 @@ def processImage(i, files, rscnames, sect, data, beg, rsc_ptr, cover_offset):
             sect.setsectiondescription(i,"Mysterious Section, first four bytes %s extracting as %s" % (describe(data[0:4]), fname))
         return rscnames, rsc_ptr
 
-    imgname = "image%05d.%s" % (i, imgtype)
+    imgname = "image%05d.%s" % (i-beg+1, imgtype)
     if cover_offset is not None and i == beg + cover_offset:
-        imgname = "cover%05d.%s" % (i, imgtype)
-    print("Extracting image: {0:s} from section {1:d}".format(imgname,i))
+        imgname = "cover%05d.%s" % (i-beg+1, imgtype)
+    print("Extracting image: {0:s} from section {1:d}".format(imgname,i-beg+1))
     outimg = os.path.join(files.imgdir, imgname)
     with open(pathof(outimg), 'wb') as f:
         f.write(data)
@@ -595,10 +599,41 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
         nav = NAVProcessor(files)
         nav.writeNAV(ncx_data, guidetext, metadata)
 
+    # 表紙の番号取得
+    cover_offset = int(mh.metadata.get('CoverOffset', ['-1'])[0])
+    if not CREATE_COVER_PAGE:
+        cover_offset = None
+
     # make an epub-like structure of it all
     print("Creating an epub-like file")
-    files.makeEPUB(usedmap, obfuscate_data, uuid)
+    files.makeEPUB(usedmap, obfuscate_data, uuid, OUTPUT_EPUB, makeOutputFileName(mh), cover_offset)
 
+
+def processZip(mh, files):
+    # make a zip
+    print("Creating a Zip file")
+    
+    # 表紙の番号取得
+    cover_offset = int(mh.metadata.get('CoverOffset', ['-1'])[0])
+    if not CREATE_COVER_PAGE:
+        cover_offset = None
+
+    files.makeZip(makeOutputFileName(mh), cover_offset)
+
+def makeOutputFileName(mh):
+    global UPDATED_TITLE
+
+    # ファイル名作成 [Creator] Title.zip
+    if UPDATED_TITLE and 'Updated_Title' in mh.metadata:
+        title = mh.metadata['Updated_Title'][0]
+    else:
+        title = mh.title
+    creator = ' & '.join(mh.metadata.get('Creator'))
+    fname = u'[{creator}] {title}'.format(creator=creator, title=title)
+
+    #ダメ文字を _ (アンダーバー)に変換する場合はこっち
+    #return safefilename.safefilename(fname)
+    return safefilename.safefilename(fname, table=safefilename.table2)
 
 def processMobi7(mh, metadata, sect, files, rscnames):
     global DUMP
@@ -846,6 +881,10 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
         # process any remaining unknown sections of the palm file
         processUnknownSections(mh, sect, files, K8Boundary)
 
+        # Zip
+        if not OUTPUT_EPUB:
+            processZip(mh, files)
+
     return
 
 
@@ -920,6 +959,8 @@ def unpackBook(infile, outdir, apnxfile=None, epubver='2', use_hd=False, dodump=
     if hasK8:
         files.makeK8Struct()
 
+    files.makeZipStruct()
+
     process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, False, epubver, use_hd)
 
     if DUMP:
@@ -946,10 +987,30 @@ def usage(progname):
     print("    -r                 write raw data to the output folder")
 
 
+def kindleunpack(infile, outdir, update_title = False, output_epub = False):
+    global UPDATED_TITLE
+    global OUTPUT_EPUB
+
+    UPDATED_TITLE = update_title
+    OUTPUT_EPUB = output_epub
+    try:
+        print('Unpacking Book...')
+        unpackBook(infile, outdir, None, 'A', True)
+        print('Completed')
+
+    except ValueError as e:
+        print("Error: %s" % e)
+        print(traceback.format_exc())
+        return 1
+
+    return 0
+
 def main(argv=unicode_argv()):
     global DUMP
     global WRITE_RAW_DATA
     global SPLIT_COMBO_MOBIS
+    global UPDATED_TITLE
+    global OUTPUT_EPUB
 
     print("KindleUnpack v0.82")
     print("   Based on initial mobipocket version Copyright © 2009 Charles M. Hannum <root@ihack.net>")
@@ -961,7 +1022,7 @@ def main(argv=unicode_argv()):
 
     progname = os.path.basename(argv[0])
     try:
-        opts, args = getopt.getopt(argv[1:], "dhirsp:", ['epub_version='])
+        opts, args = getopt.getopt(argv[1:], "dhirspt:", ['epub_version='])
     except getopt.GetoptError as err:
         print(str(err))
         usage(progname)
@@ -974,6 +1035,8 @@ def main(argv=unicode_argv()):
     apnxfile = None
     epubver = '2'
     use_hd = False
+    UPDATED_TITLE = False
+    OUTPUT_EPUB = False
 
     for o, a in opts:
         if o == "-h":
@@ -987,6 +1050,10 @@ def main(argv=unicode_argv()):
             WRITE_RAW_DATA = True
         if o == "-s":
             SPLIT_COMBO_MOBIS = True
+        if o == "-t":
+            UPDATED_TITLE = True
+        if o == "-e":
+            OUTPUT_EPUB = True
         if o == "-p":
             apnxfile = a
         if o == "--epub_version":

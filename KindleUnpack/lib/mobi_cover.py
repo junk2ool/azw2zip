@@ -35,6 +35,8 @@ MAX_HEIGHT = 4096
 
 def get_image_type(imgname, imgdata=None):
     imgtype = unicode_str(imghdr.what(pathof(imgname), imgdata))
+    if imgtype == "jpeg":
+        imgtype = "jpg"
 
     # imghdr only checks for JFIF or Exif JPEG files. Apparently, there are some
     # with only the magic JPEG bytes out there...
@@ -50,7 +52,7 @@ def get_image_type(imgname, imgdata=None):
                 last-=1
             # Be extra safe, check the trailing bytes, too.
             if imgdata[last-2:last] == b'\xFF\xD9':
-                imgtype = "jpeg"
+                imgtype = "jpg"
     return imgtype
 
 
@@ -76,7 +78,7 @@ def get_image_size(imgname, imgdata=None):
         width, height = struct.unpack(b'>ii', head[16:24])
     elif imgtype == 'gif':
         width, height = struct.unpack(b'<HH', head[6:10])
-    elif imgtype == 'jpeg' and imgdata is None:
+    elif imgtype == 'jpg' and imgdata is None:
         try:
             fhandle.seek(0)  # Read 0xff next
             size = 2
@@ -93,7 +95,7 @@ def get_image_size(imgname, imgdata=None):
             height, width = struct.unpack(b'>HH', fhandle.read(4))
         except Exception:  # IGNORE:W0703
             return
-    elif imgtype == 'jpeg' and imgdata is not None:
+    elif imgtype == 'jpg' and imgdata is not None:
         try:
             pos = 0
             size = 2

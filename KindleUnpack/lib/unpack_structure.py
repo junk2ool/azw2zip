@@ -22,6 +22,9 @@ import zipfile
 import binascii
 from .mobi_utils import mangle_fonts
 
+import distutils
+from distutils import dir_util
+
 class unpackException(Exception):
     pass
 
@@ -67,6 +70,7 @@ class fileNames:
         self.k8images = os.path.join(self.k8oebps,'Images')
         if not unipath.exists(self.k8images):
             unipath.mkdir(self.k8images)
+        self.HDimages = os.path.join(self.outdir,'azw6_images')
         self.k8fonts = os.path.join(self.k8oebps,'Fonts')
         if not unipath.exists(self.k8fonts):
             unipath.mkdir(self.k8fonts)
@@ -77,8 +81,17 @@ class fileNames:
         if not unipath.exists(self.k8text):
             unipath.mkdir(self.k8text)
 
+    def makeZipStruct(self):
+        self.k8dir = os.path.join(self.outdir,'mobi8')
+        self.k8oebps = os.path.join(self.k8dir,'OEBPS')
+        self.k8images = os.path.join(self.k8oebps,'Images')
+        self.HDimages = os.path.join(self.outdir,'azw6_images')
+        self.zipdir = os.path.join(self.outdir,'zip')
+        if not unipath.exists(self.zipdir):
+            unipath.mkdir(self.zipdir)
+
     # recursive zip creation support routine
-    def zipUpDir(self, myzip, tdir, localname):
+    def zipUpDir(self, myzip, tdir, localname, compress_type=zipfile.ZIP_DEFLATED):
         currentdir = tdir
         if localname != "":
             currentdir = os.path.join(currentdir,localname)
@@ -88,12 +101,21 @@ class fileNames:
             localfilePath = os.path.join(localname, afilename)
             realfilePath = os.path.join(currentdir,file)
             if unipath.isfile(realfilePath):
-                myzip.write(pathof(realfilePath), pathof(localfilePath), zipfile.ZIP_DEFLATED)
+                myzip.write(pathof(realfilePath), pathof(localfilePath), compress_type)
             elif unipath.isdir(realfilePath):
                 self.zipUpDir(myzip, tdir, localfilePath)
 
-    def makeEPUB(self, usedmap, obfuscate_data, uid):
-        bname = os.path.join(self.k8dir, self.getInputFileBasename() + '.epub')
+    def makeEPUB(self, usedmap, obfuscate_data, uid, output_epub, fname, cover_offset):
+        if output_epub:
+            bname = os.path.join(self.outdir, '../' + fname + '.epub')
+            fname_txt = os.path.join(self.outdir, 'fname.txt')
+            f = open(fname_txt, 'wb')
+            f.write(fname.encode('utf-8'))
+            f.write('.epub')
+            f.close()
+        else:
+            bname = os.path.join(self.k8dir, self.getInputFileBasename() + '.epub')
+
         # Create an encryption key for Adobe font obfuscation
         # based on the epub's uid
         if isinstance(uid,text_type):
@@ -151,8 +173,14 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
             with open(pathof(fileout),'wb') as f:
                 f.write(encryption.encode('utf-8'))
 
+        if not output_epub:
+            return
+        
         # ready to build epub
         self.outzip = zipfile.ZipFile(pathof(bname), 'w')
+
+        # HDイメージ差し替え
+        replaceHDimages(self.HDimages, self.k8images, cover_offset)
 
         # add the mimetype file uncompressed
         mimetype = b'application/epub+zip'
@@ -165,3 +193,45 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         self.zipUpDir(self.outzip,self.k8dir,'META-INF')
         self.zipUpDir(self.outzip,self.k8dir,'OEBPS')
         self.outzip.close()
+
+    def makeZip(self, fname, cover_offset):
+        bname = os.path.join(self.outdir, '../' + fname + '.zip')
+
+        fname_txt = os.path.join(self.outdir, 'fname.txt')
+        f = open(fname_txt, 'wb')
+        f.write(fname.encode('utf-8'))
+        f.write('.zip')
+        f.close()
+
+        # ready to build zip
+        self.outzip = zipfile.ZipFile(pathof(bname), 'w')
+
+        if unipath.exists(self.k8images):
+            distutils.dir_util.copy_tree(self.k8images, self.zipdir)
+        else:
+            distutils.dir_util.copy_tree(self.imgdir, self.zipdir)
+
+        # HDイメージ差し替え
+        replaceHDimages(self.HDimages, self.zipdir, cover_offset)
+        
+        # 無圧縮zipで作成
+        # self.zipUpDir(self.outzip, self.zipdir, '') # 圧縮するときはこっち
+        self.zipUpDir(self.outzip, self.zipdir, '', zipfile.ZIP_STORED)
+        self.outzip.close()
+
+def replaceHDimages(src_dir, dest_dir, cover_offset):
+    # HDイメージ差し替え
+    if unipath.exists(src_dir):
+        distutils.dir_util.copy_tree(src_dir, dest_dir)
+
+        # HDカバー画像をリネーム
+        if cover_offset is not None:
+            imgtype = 'jpg'
+            imgname = "image%05d.%s" % (cover_offset+1, imgtype)
+            imgpath = os.path.join(dest_dir, imgname)
+            cvrname = "cover%05d.%s" % (cover_offset+1, imgtype)
+            cvrpath = os.path.join(dest_dir, cvrname)
+            if unipath.exists(imgpath):
+                if unipath.exists(cvrpath):
+                    os.remove(cvrpath)
+                os.rename(imgpath, cvrpath)

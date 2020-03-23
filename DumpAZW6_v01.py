@@ -8,6 +8,8 @@ import imghdr
 
 def get_image_type(imgname, imgdata=None):
     imgtype = imghdr.what(imgname, imgdata)
+    if imgtype == "jpeg":
+        imgtype = "jpg"
 
     # horrible hack since imghdr detects jxr/wdp as tiffs
     if imgtype is not None and imgtype == "tiff":
@@ -24,21 +26,25 @@ def get_image_type(imgname, imgdata=None):
                 last-=1
             # Be extra safe, check the trailing bytes, too.
             if imgdata[last-2:last] == b'\xFF\xD9':
-                imgtype = "jpeg"
+                imgtype = "jpg"
     return imgtype
 
 
-def processCRES(i, data):
+def processCRES(i, data, outdir):
     data = data[12:]
     imgtype = get_image_type(None, data)
     if imgtype is None:
-        print "        Warning: CRES Section %s does not contain a recognised resource" % i
+        print("        Warning: CRES Section %s does not contain a recognised resource" % i)
         imgtype = "dat"
-    imgname = "HDimage%05d.%s" % (i, imgtype)
-    imgdir = os.path.join(".", "azw6_images")
+    imgname = "image%05d.%s" % (i, imgtype)
+    if outdir is None:
+        imgdir = os.path.join(".", "azw6_images")
+    else:
+        imgdir = os.path.join(outdir, "azw6_images")
+    #print imgdir
     if not os.path.exists(imgdir):
         os.mkdir(imgdir)
-    print "        Extracting HD image: {0:s} from section {1:d}".format(imgname,i)
+    print("        Extracting HD image: {0:s} from section {1:d}".format(imgname,i))
     imgpath = os.path.join(imgdir, imgname)
     with open(imgpath, 'wb') as f:
         f.write(data) 
@@ -134,27 +140,27 @@ def dump_contexth(codec, extheader):
         content = extheader[pos + 8: pos + size]
         if id in id_map_strings.keys():
             name = id_map_strings[id]
-            print '\n    Key: "%s"\n        Value: "%s"' % (name, unicode(content, codec).encode("utf-8"))
+            print('\n    Key: "%s"\n        Value: "%s"' % (name, unicode(content, codec).encode("utf-8")))
         elif id in id_map_values.keys():
             name = id_map_values[id]
             if size == 9:
                 value, = struct.unpack('B',content)
-                print '\n    Key: "%s"\n        Value: 0x%01x' % (name, value)
+                print('\n    Key: "%s"\n        Value: 0x%01x' % (name, value))
             elif size == 10:
                 value, = struct.unpack('>H',content)
-                print '\n    Key: "%s"\n        Value: 0x%02x' % (name, value)
+                print('\n    Key: "%s"\n        Value: 0x%02x' % (name, value))
             elif size == 12:
                 value, = struct.unpack('>L',content)
-                print '\n    Key: "%s"\n        Value: 0x%04x' % (name, value)
+                print('\n    Key: "%s"\n        Value: 0x%04x' % (name, value))
             else:
-                print "\nError: Value for %s has unexpected size of %s" % (name, size)
+                print("\nError: Value for %s has unexpected size of %s" % (name, size))
         elif id in id_map_hexstrings.keys():
             name = id_map_hexstrings[id]
-            print '\n    Key: "%s"\n        Value: 0x%s' % (name, content.encode('hex'))
+            print('\n    Key: "%s"\n        Value: 0x%s' % (name, content.encode('hex')))
         else:
-            print "\nWarning: Unknown metadata with id %s found" % id
+            print("\nWarning: Unknown metadata with id %s found" % id)
             name = str(id) + ' (hex)'
-            print '    Key: "%s"\n        Value: 0x%s' % (name, content.encode('hex'))
+            print('    Key: "%s"\n        Value: 0x%s' % (name, content.encode('hex')))
         pos += size
     return
 
@@ -249,50 +255,30 @@ class HdrParser:
                     fmt_string = "  Field: %20s   Offset: 0x%03x   Width:  %d   Value: 0x%0" + str(tot_len) + "x"
                 else:
                     fmt_string = "  Field: %20s   Offset: 0x%03x   Width:  %d   Value: %s"
-                print fmt_string % (key, pos, tot_len, self.hdr[key])
-        print "EXTH Region Length:  0x%0x" % len(self.exth)
-        print "EXTH MetaData"
-        print self.title
+                print(fmt_string % (key, pos, tot_len, self.hdr[key]))
+        print("EXTH Region Length:  0x%0x" % len(self.exth))
+        print("EXTH MetaData")
+        print(self.title)
         dump_contexth(self.codec, self.exth)
         return
 
 
 def usage(progname):
-    print ""
-    print "Description:"
-    print "   Dump the image from an AZW6 HD container file"
-    print "  "
-    print "Usage:"
-    print "  %s -h infile.azw6" % progname
-    print "  "
-    print "Options:"
-    print "    -h           print this help message"
+    print("")
+    print("Description:")
+    print("   Dump the image from an AZW6 HD container file")
+    print("  ")
+    print("Usage:")
+    print("  %s -h infile.azw6(res) [outdir]" % progname)
+    print("  ")
+    print("Options:")
+    print("    -h           print this help message")
 
-
-def main(argv=sys.argv):
-    print "DumpAZW6 v01"
-    progname = os.path.basename(argv[0])
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "h")
-    except getopt.GetoptError, err:
-        print str(err)
-        usage(progname)
-        sys.exit(2)
-
-    if len(args) != 1:
-        usage(progname)
-        sys.exit(2)
-
-    for o, a in opts:
-        if o == "-h":
-            usage(progname)
-            sys.exit(0)
-
-    infile = args[0]
+def DumpAZW6(infile, outdir):
     infileext = os.path.splitext(infile)[1].upper()
-    print infile, infileext
-    if infileext not in ['.AZW6']:
-        print "Error: first parameter must be a Kindle AZW6 HD container file."
+    print(infile, infileext)
+    if infileext not in ['.AZW6'] and infileext not in ['.RES']:
+        print("Error: first parameter must be a Kindle AZW6 HD container file.")
         return 1
 
     try:
@@ -308,7 +294,7 @@ def main(argv=sys.argv):
         pp = PalmDB(contdata)
         header = pp.readsection(0)
 
-        print "\n\nFirst Header Dump from Section %d" % 0
+        print("\n\nFirst Header Dump from Section %d" % 0)
         hp = HdrParser(header, 0)
         hp.dumpHeaderInfo()
 
@@ -329,9 +315,9 @@ def main(argv=sys.argv):
         off = -1
         hp = None
         secmap = {}
-        print "\nMap of Palm DB Sections"
-        print "    Dec  - Hex : Description"
-        print "    ---- - ----  -----------"
+        print("\nMap of Palm DB Sections")
+        print("    Dec  - Hex : Description")
+        print("    ---- - ----  -----------")
         for i in xrange(n):
             before, after = pp.getsecaddr(i)
             data = pp.readsection(i)
@@ -352,19 +338,39 @@ def main(argv=sys.argv):
                 if dt == "CONT":
                     desc="Cont Header"
                 elif dt == "CRES":
-                    processCRES(i, data)
+                    processCRES(i, data, outdir)
             else:
                 desc = dtext.encode('hex')
                 desc = desc + " " + dtext
             if desc != "CONT":
-                print "    %04d - %04x: %s [%d]" % (i, i, desc, dlen)
+                print("    %04d - %04x: %s [%d]" % (i, i, desc, dlen))
 
-    except Exception, e:
-        print "Error: %s" % e
+    except Exception as e:
+        print("Error: %s" % e)
         return 1
 
     return 0
 
+def main(argv=sys.argv):
+    print("DumpAZW6 v01")
+    progname = os.path.basename(argv[0])
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "h")
+    except getopt.GetoptError as err:
+        print(str(err))
+        usage(progname)
+        sys.exit(2)
+
+    if len(args) != 2:
+        usage(progname)
+        sys.exit(2)
+
+    for o, a in opts:
+        if o == "-h":
+            usage(progname)
+            sys.exit(0)
+
+    return DumpAZW6(args[0], args[1])
 
 if __name__ == '__main__':
     sys.exit(main())
