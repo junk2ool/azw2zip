@@ -10,9 +10,10 @@ import glob
 import shutil
 import random
 import string
+import io
 
 __license__ = 'GPL v3'
-__version__ = u"0.1"
+__version__ = u"0.2"
 
 sys.path.append(os.path.join(sys.path[0], "DeDRM_Plugin"))
 sys.path.append(os.path.join(sys.path[0], 'KindleUnpack', 'lib'))
@@ -86,7 +87,7 @@ def main(argv=unicode_argv()):
             debug_mode = True
 
     # k4i ディレクトリはスクリプトのディレクトリ
-    k4i_dir = os.path.dirname(os.path.abspath(__file__))
+    k4i_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     print(u"k4iディレクトリ: {}".format(k4i_dir))
     k4i_files = glob.glob(os.path.join(k4i_dir, '*.k4i'))
     if not len(k4i_files):
@@ -98,7 +99,7 @@ def main(argv=unicode_argv()):
         
         print(u"k4i作成: 開始: {}".format(k4i_dir))
         if debug_mode:
-            kindlekey.make_kindlekey(k4i_dir)
+            kindlekey.getkey(k4i_dir)
         else:
             with redirect_stdout(open(os.devnull, 'w')):
                 kindlekey.getkey(k4i_dir)
@@ -208,8 +209,11 @@ def main(argv=unicode_argv()):
             fname_path = os.path.join(temp_dir, "fname.txt")
             if kindleunpack.unipath.exists(fname_path):
                 fname_file = codecs.open(fname_path, 'r', 'utf-8')
-                fname_txt = fname_file.readline()
-                print(u"  {}変換: 完了: {}".format(output_format, os.path.join(out_dir, fname_txt.rstrip())))
+                fname_txt = fname_file.readline().rstrip()
+                try:
+                    print(u"  {}変換: 完了: {}".format(output_format, os.path.join(out_dir, fname_txt)))
+                except UnicodeEncodeError:
+                    print(u"  {}変換: 完了: {}".format(output_format, os.path.join(out_dir, fname_txt.encode('cp932', 'replace').decode('cp932'))))
                 fname_file.close()
             else:
                 print(u"  {}変換: 失敗:".format(output_format))

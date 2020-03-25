@@ -1,5 +1,5 @@
 /*
-  azw2zip v.0.1
+  azw2zip v.0.2
     Copyright (C) 2020 junk2ool
 */
 
@@ -34,10 +34,11 @@ Pythonの環境を整えてからazw2zip.vbsにpython.exeのパスを設定し�
 変換したい書籍のディレクトリをazw2zip.vbsにD&Dするとこれと同じディレクトリにzipが作成されます。
 
 ■変更点
-DeDRM
-・出力ファイル名を_nodrmを付けただけのものに変更。(DeDRM_Plugin/k4mobidedrm.py)
-・©のprintがWindows環境ではエラーになるので(C)に変更。(DeDRM_Plugin/mobidedrm.py)
-・python-lzmaを入れなくても大丈夫なように変更(多分)。(DeDRM_Plugin/ion.py)
+DeDRM - DeDRM_Plugin
+・出力ファイル名を_nodrmを付けただけのものに変更。(k4mobidedrm.py)
+・©のprintがWindows環境ではエラーになるので(C)に変更。(mobidedrm.py)
+・python-lzmaを入れなくても大丈夫なように変更(多分)。(ion.py)
+・S-JISに存在しないUnicode文字の表示がWindows環境でエラーが出ないように対策。(k4mobidedrm.py)
 
 DumpAZW6
 ・外部から呼べるように関数を追加。(DumpAZW6_v01.py)
@@ -46,12 +47,13 @@ DumpAZW6
 ・出力される画像のファイル名をHDimage->imageに変更。(DumpAZW6_v01.py)
 ・出力されるJPEG画像の拡張子をjpeg->jpgに変更。(DumpAZW6_v01.py)
 
-KindleUnpack
-・外部から呼べるように関数を追加。(KindleUnpack/lib/kindleunpack.py)
-・出力されるJPEG画像の拡張子をjpeg->jpgに変更。(KindleUnpack/lib/kindleunpack.py、KindleUnpack/lib/mobi_cover.py)
-・出力される画像の連番を00001からに変更。(KindleUnpack/lib/kindleunpack.py)
-・zipでも出力できるように追加。(KindleUnpack/lib/kindleunpack.py、KindleUnpack/lib/unpack_structure.py)
-・DumpAZW6で出力したHD画像を取り込むように追加。(KindleUnpack/lib/unpack_structure.py)
+KindleUnpack - KindleUnpack/lib
+・外部から呼べるように関数を追加。(kindleunpack.py)
+・出力されるJPEG画像の拡張子をjpeg->jpgに変更。(kindleunpack.py、mobi_cover.py)
+・出力される画像の連番を00001からに変更。(kindleunpack.py)
+・zipでも出力できるように追加。(kindleunpack.py、unpack_structure.py)
+・DumpAZW6で出力したHD画像を取り込むように追加。(unpack_structure.py)
+・S-JISに存在しないUnicode文字の表示がWindows環境でエラーが出ないように対策。(mobi_header.py)
 
 ■その他
 出力されるファル名は、
@@ -64,7 +66,7 @@ KindleUnpack
 
 出力ファイル名を変えたければ、
 KindleUnpack/lib/kindleunpack.py
-の623行からの部分を変更してください。
+の625行からの部分を変更してください。
 
 ■使用したもの等
 DeDRM_tools 6.7.0
@@ -88,5 +90,10 @@ http://rio2016.5ch.net/test/read.cgi/ebooks/1526467330/395
 GNU General Public License v3.0
 
 ■履歴
+2020/03/25 v.0.2
+・S-JISに存在しないUnicode文字が作者名/作品名に含まれていた場合、出力ファイル名が数値文字参照になっていたのを修正。
+・-dオプションを付けた場合、Windows環境で上記の時エラーになっていたのを対策。
+・-dオプションを付けた場合、キーファイル(k4i)が作成できずエラーになっていたのを修正。
+
 2020/03/23 v.0.1
 ・なんとなく形になったので公開

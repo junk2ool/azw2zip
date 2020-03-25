@@ -69,7 +69,7 @@ import getopt
 import re
 import traceback
 import time
-import htmlentitydefs
+import html.entities as htmlentitydefs
 import json
 
 class DrmException(Exception):
@@ -220,7 +220,10 @@ def GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime 
         mb = topazextract.TopazBook(infile)
 
     bookname = unescape(mb.getBookTitle())
-    print u"Decrypting {1} ebook: {0}".format(bookname, mb.getBookType())
+    try:
+        print(u"Decrypting {1} ebook: {0}".format(bookname, mb.getBookType()))
+    except UnicodeEncodeError:
+        print(u"Decrypting {1} ebook: {0}".format(bookname.encode('cp932', 'replace').decode('cp932'), mb.getBookType()))
 
     # copy list of pids
     totalpids = list(pids)
@@ -232,7 +235,7 @@ def GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime 
     totalpids.extend(kgenpids.getPidList(md1, md2, serials, kDatabases))
     # remove any duplicates
     totalpids = list(set(totalpids))
-    print u"Found {1:d} keys to try after {0:.1f} seconds".format(time.time()-starttime, len(totalpids))
+    print(u"Found {1:d} keys to try after {0:.1f} seconds".format(time.time()-starttime, len(totalpids)))
     #print totalpids
 
     try:
@@ -241,7 +244,7 @@ def GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime 
         mb.cleanup
         raise
 
-    print u"Decryption succeeded after {0:.1f} seconds".format(time.time()-starttime)
+    print(u"Decryption succeeded after {0:.1f} seconds".format(time.time()-starttime))
     return mb
 
 
@@ -255,16 +258,16 @@ def decryptBook(infile, outdir, kDatabaseFiles, androidFiles, serials, pids):
             with open(dbfile, 'r') as keyfilein:
                 kindleDatabase = json.loads(keyfilein.read())
             kDatabases.append([dbfile,kindleDatabase])
-        except Exception, e:
-            print u"Error getting database from file {0:s}: {1:s}".format(dbfile,e)
+        except Exception as e:
+            print(u"Error getting database from file {0:s}: {1:s}".format(dbfile,e))
             traceback.print_exc()
 
 
 
     try:
         book = GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime)
-    except Exception, e:
-        print u"Error decrypting book after {1:.1f} seconds: {0}".format(e.args[0],time.time()-starttime)
+    except Exception as e:
+        print(u"Error decrypting book after {1:.1f} seconds: {0}".format(e.args[0],time.time()-starttime))
         traceback.print_exc()
         return 1
 
@@ -280,12 +283,12 @@ def decryptBook(infile, outdir, kDatabaseFiles, androidFiles, serials, pids):
     outfile = os.path.join(outdir, outfilename + book.getBookExtension())
 
     book.getFile(outfile)
-    print u"Saved decrypted book {1:s} after {0:.1f} seconds".format(time.time()-starttime, outfilename)
+    print(u"Saved decrypted book {1:s} after {0:.1f} seconds".format(time.time()-starttime, outfilename))
 
     if book.getBookType()==u"Topaz":
         zipname = os.path.join(outdir, outfilename + u"_SVG.zip")
         book.getSVGZip(zipname)
-        print u"Saved SVG ZIP Archive for {1:s} after {0:.1f} seconds".format(time.time()-starttime, outfilename)
+        print(u"Saved SVG ZIP Archive for {1:s} after {0:.1f} seconds".format(time.time()-starttime, outfilename))
 
     # remove internal temporary directory of Topaz pieces
     book.cleanup()
@@ -293,9 +296,9 @@ def decryptBook(infile, outdir, kDatabaseFiles, androidFiles, serials, pids):
 
 
 def usage(progname):
-    print u"Removes DRM protection from Mobipocket, Amazon KF8, Amazon Print Replica and Amazon Topaz ebooks"
-    print u"Usage:"
-    print u"    {0} [-k <kindle.k4i>] [-p <comma separated PIDs>] [-s <comma separated Kindle serial numbers>] [ -a <AmazonSecureStorage.xml|backup.ab> ] <infile> <outdir>".format(progname)
+    print(u"Removes DRM protection from Mobipocket, Amazon KF8, Amazon Print Replica and Amazon Topaz ebooks")
+    print(u"Usage:")
+    print(u"    {0} [-k <kindle.k4i>] [-p <comma separated PIDs>] [-s <comma separated Kindle serial numbers>] [ -a <AmazonSecureStorage.xml|backup.ab> ] <infile> <outdir>".format(progname))
 
 #
 # Main
@@ -303,12 +306,12 @@ def usage(progname):
 def cli_main():
     argv=unicode_argv()
     progname = os.path.basename(argv[0])
-    print u"K4MobiDeDrm v{0}.\nCopyright © 2008-2017 Apprentice Harper et al.".format(__version__)
+    print(u"K4MobiDeDrm v{0}.\nCopyright © 2008-2017 Apprentice Harper et al.".format(__version__))
 
     try:
         opts, args = getopt.getopt(argv[1:], "k:p:s:a:")
-    except getopt.GetoptError, err:
-        print u"Error in options or arguments: {0}".format(err.args[0])
+    except getopt.GetoptError as err:
+        print(u"Error in options or arguments: {0}".format(err.args[0]))
         usage(progname)
         sys.exit(2)
     if len(args)<2:

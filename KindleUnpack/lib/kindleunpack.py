@@ -12,10 +12,12 @@ import sys
 import codecs
 import traceback
 
-from .compatibility_utils import PY2, binary_type, utf8_str, unicode_str
+from .compatibility_utils import PY2, binary_type, utf8_str, unicode_str, unescapeit
 from .compatibility_utils import unicode_argv, add_cp65001_codec
 from .compatibility_utils import hexlify
 import safefilename
+
+from xml.sax.saxutils import escape as xmlescape
 
 add_cp65001_codec()
 
@@ -624,11 +626,19 @@ def makeOutputFileName(mh):
     global UPDATED_TITLE
 
     # ファイル名作成 [Creator] Title.zip
+    # Title
     if UPDATED_TITLE and 'Updated_Title' in mh.metadata:
         title = mh.metadata['Updated_Title'][0]
     else:
         title = mh.title
-    creator = ' & '.join(mh.metadata.get('Creator'))
+    title = xmlescape(unescapeit(unicode_str(title)))
+    # Creator
+    creator = ''
+    for index in range(len(mh.metadata.get('Creator'))):
+        if index != 0:
+            creator += ' & '
+        creator += xmlescape(unescapeit(unicode_str(mh.metadata.get('Creator')[index])))
+    #
     fname = u'[{creator}] {title}'.format(creator=creator, title=title)
 
     #ダメ文字を _ (アンダーバー)に変換する場合はこっち

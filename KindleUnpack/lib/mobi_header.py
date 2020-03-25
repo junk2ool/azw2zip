@@ -923,7 +923,10 @@ class MobiHeader:
         print("Codec:", self.codec)
         print("Title:", self.title)
         if 'Updated_Title' in self.metadata:
-            print("EXTH Title:", self.metadata['Updated_Title'][0])
+            try:
+                print("EXTH Title:", self.metadata['Updated_Title'][0])
+            except UnicodeEncodeError:
+                print("EXTH Title:", self.metadata['Updated_Title'][0].encode('cp932', 'replace').decode('cp932'))
         if self.compression == 0x4448:
             print("Huffdic compression")
         elif self.compression == 2:
