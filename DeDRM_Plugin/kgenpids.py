@@ -23,6 +23,8 @@ import re
 from struct import pack, unpack, unpack_from
 import traceback
 
+PY2 = sys.version_info[0] == 2
+
 class DrmException(Exception):
     pass
 
@@ -84,7 +86,10 @@ def decode(data,map):
 def getTwoBitsFromBitField(bitField,offset):
     byteNumber = offset // 4
     bitPosition = 6 - 2*(offset % 4)
-    return ord(bitField[byteNumber]) >> bitPosition & 3
+    if type(bitField) is str:
+        return ord(bitField[byteNumber]) >> bitPosition & 3
+    else:
+        return bitField[byteNumber] >> bitPosition & 3
 
 # Returns the six bits at offset from a bit field
 def getSixBitsFromBitField(bitField,offset):
@@ -118,7 +123,10 @@ def generatePidEncryptionTable() :
 def generatePidSeed(table,dsn) :
     value = 0
     for counter in range (0,4) :
-        index = (ord(dsn[counter]) ^ value) &0xFF
+        if type(dsn) is str:
+            index = (ord(dsn[counter]) ^ value) &0xFF
+        else:
+            index = (dsn[counter] ^ value) &0xFF
         value = (value >> 8) ^ table[index]
     return value
 
@@ -130,7 +138,10 @@ def generateDevicePID(table,dsn,nbRoll):
     pid = [(seed >>24) &0xFF,(seed >> 16) &0xff,(seed >> 8) &0xFF,(seed) & 0xFF,(seed>>24) & 0xFF,(seed >> 16) &0xff,(seed >> 8) &0xFF,(seed) & 0xFF]
     index = 0
     for counter in range (0,nbRoll):
-        pid[index] = pid[index] ^ ord(dsn[counter])
+        if type(dsn) is str:
+            pid[index] = pid[index] ^ ord(dsn[counter])
+        else:
+            pid[index] = pid[index] ^ dsn[counter]
         index = (index+1) %8
     for counter in range (0,8):
         index = ((((pid[counter] >>5) & 3) ^ pid[counter]) & 0x1f) + (pid[counter] >> 7)
@@ -138,7 +149,7 @@ def generateDevicePID(table,dsn,nbRoll):
     return pidAscii
 
 def crc32(s):
-    return (~binascii.crc32(s,-1))&0xFFFFFFFF
+    return (~binascii.crc32(s.encode(encoding='utf-8'),-1))&0xFFFFFFFF
 
 # convert from 8 digit PID to 10 digit PID with checksum
 def checksumPid(s):
@@ -206,7 +217,10 @@ def getK4Pids(rec209, token, kindleDatabase):
 
     try:
         # Get the kindle account token, if present
-        kindleAccountToken = (kindleDatabase[1])['kindle.account.tokens'].decode('hex')
+        if type((kindleDatabase[1])['kindle.account.tokens']) is str:
+            kindleAccountToken = binascii.unhexlify((kindleDatabase[1])['kindle.account.tokens'])
+        else:
+            kindleAccountToken = (kindleDatabase[1])['kindle.account.tokens'].decode('hex')
 
     except KeyError:
         kindleAccountToken=""
@@ -214,33 +228,51 @@ def getK4Pids(rec209, token, kindleDatabase):
 
     try:
         # Get the DSN token, if present
-        DSN = (kindleDatabase[1])['DSN'].decode('hex')
+        if type((kindleDatabase[1])['DSN']) is str:
+            DSN = binascii.unhexlify((kindleDatabase[1])['DSN'])
+        else:
+            DSN = (kindleDatabase[1])['DSN'].decode('hex')
         print(u"Got DSN key from database {0}".format(kindleDatabase[0]))
     except KeyError:
         # See if we have the info to generate the DSN
         try:
             # Get the Mazama Random number
-            MazamaRandomNumber = (kindleDatabase[1])['MazamaRandomNumber'].decode('hex')
-            #print u"Got MazamaRandomNumber from database {0}".format(kindleDatabase[0])
+            if type((kindleDatabase[1])['MazamaRandomNumber']) is str:
+                MazamaRandomNumber = binascii.unhexlify((kindleDatabase[1])['MazamaRandomNumber'])
+            else:
+                MazamaRandomNumber = (kindleDatabase[1])['MazamaRandomNumber'].decode('hex')
+            #print(u"Got MazamaRandomNumber from database {0}".format(kindleDatabase[0]))
 
             try:
                 # Get the SerialNumber token, if present
-                IDString = (kindleDatabase[1])['SerialNumber'].decode('hex')
+                if type((kindleDatabase[1])['SerialNumber']) is str:
+                    IDString = binascii.unhexlify((kindleDatabase[1])['SerialNumber'])
+                else:
+                    IDString = (kindleDatabase[1])['SerialNumber'].decode('hex')
                 print(u"Got SerialNumber from database {0}".format(kindleDatabase[0]))
             except KeyError:
                  # Get the IDString we added
-                IDString = (kindleDatabase[1])['IDString'].decode('hex')
+                if type((kindleDatabase[1])['IDString']) is str:
+                    IDString = binascii.unhexlify((kindleDatabase[1])['IDString'])
+                else:
+                    IDString = (kindleDatabase[1])['IDString'].decode('hex')
 
             try:
                 # Get the UsernameHash token, if present
-                encodedUsername = (kindleDatabase[1])['UsernameHash'].decode('hex')
+                if type((kindleDatabase[1])['UsernameHash']) is str:
+                    encodedUsername = binascii.unhexlify((kindleDatabase[1])['UsernameHash'])
+                else:
+                    encodedUsername = (kindleDatabase[1])['UsernameHash'].decode('hex')
                 print(u"Got UsernameHash from database {0}".format(kindleDatabase[0]))
             except KeyError:
                 # Get the UserName we added
-                UserName = (kindleDatabase[1])['UserName'].decode('hex')
+                if type((kindleDatabase[1])['UserName']) is str:
+                    UserName = binascii.unhexlify((kindleDatabase[1])['UserName'])
+                else:
+                    UserName = (kindleDatabase[1])['UserName'].decode('hex')
                 # encode it
                 encodedUsername = encodeHash(UserName,charMap1)
-                #print u"encodedUsername",encodedUsername.encode('hex')
+                #print(u"encodedUsername",encodedUsername.encode('hex'))
         except KeyError:
             print(u"Keys not found in the database {0}.".format(kindleDatabase[0]))
             return pids
@@ -265,6 +297,8 @@ def getK4Pids(rec209, token, kindleDatabase):
     pids.append(devicePID)
 
     # Compute book PIDs
+    if not PY2:
+        token = token.encode(encoding='utf-8')
 
     # book pid
     pidHash = SHA1(DSN+kindleAccountToken+rec209+token)
@@ -297,14 +331,14 @@ def getPidList(md1, md2, serials=[], kDatabases=[]):
     for kDatabase in kDatabases:
         try:
             pidlst.extend(getK4Pids(md1, md2, kDatabase))
-        except Exception, e:
+        except Exception as e:
             print(u"Error getting PIDs from database {0}: {1}".format(kDatabase[0],e.args[0]))
             traceback.print_exc()
 
     for serialnum in serials:
         try:
             pidlst.extend(getKindlePids(md1, md2, serialnum))
-        except Exception, e:
+        except Exception as e:
             print(u"Error getting PIDs from serial number {0}: {1}".format(serialnum ,e.args[0]))
             traceback.print_exc()
 

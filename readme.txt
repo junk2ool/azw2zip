@@ -1,5 +1,5 @@
 /*
-  azw2zip v.0.2
+  azw2zip v.0.3
     Copyright (C) 2020 junk2ool
 */
 
@@ -16,14 +16,17 @@ Windows 10とWSL(Ubuntu 18.4 LTS)のPython2.7、Kindle 1.24で開発＆動作確
 ■使用方法
 各々の環境にPython 2.7(+pycrypto)を入れてazw2zip.pyに引数を渡して実行してください。
 引数は、
-azw2zip [-t] [-e] [-d] <azw_indir> [outdir]
+azw2zip [-z] [-e] [-f] [-t] [-c] [-d] <azw_indir> [outdir]
 
- -t : ファイル名の作品名をUpdated_Titleを使用するように(calibreと同じ形式)
- -e : zipではなくepubを出力するように
- -d : デバッグモード(標準出力表示＆作業ファイルを消さない)
- azw_indir : My Kindle Content内の変換したい書籍のディレクトリ
-             (ディレクトリを再帰的に読み込むのでMy Kindle Contentディレクトリを指定するとすべての書籍を変換出来ます)
- outdir : 出力先(省略するとこれと同じディレクトリ)
+ -z : zipを出力(出力形式省略時のデフォルト)
+ -e : epubを出力
+ -f : Imagesディレクトリを出力
+ -t : ファイル名の作品名にUpdated_Titleを使用する(calibreと同じ形式)
+ -c : zipでの出力時に圧縮をする
+ -d : デバッグモード(各ツールの標準出力表示＆作業ディレクトリ消さない)
+ azw_indir : 変換する書籍のディレクトリ(再帰的に読み込みます)
+             (My Kindle Contentディレクトリを指定するとすべての書籍が変換されます)
+ outdir : 出力先ディレクトリ(省略時はazw2zipと同じディレクトリ)
 
 ★注意★
 -dを付けてazw_indirにMy Kindle Contentを指定するとすべての書籍を変換し、
@@ -34,6 +37,8 @@ Pythonの環境を整えてからazw2zip.vbsにpython.exeのパスを設定し�
 変換したい書籍のディレクトリをazw2zip.vbsにD&Dするとこれと同じディレクトリにzipが作成されます。
 
 ■変更点
+全般的にPython3への対応。
+
 DeDRM - DeDRM_Plugin
 ・出力ファイル名を_nodrmを付けただけのものに変更。(k4mobidedrm.py)
 ・©のprintがWindows環境ではエラーになるので(C)に変更。(mobidedrm.py)
@@ -52,12 +57,14 @@ KindleUnpack - KindleUnpack/lib
 ・出力されるJPEG画像の拡張子をjpeg->jpgに変更。(kindleunpack.py、mobi_cover.py)
 ・出力される画像の連番を00001からに変更。(kindleunpack.py)
 ・zipでも出力できるように追加。(kindleunpack.py、unpack_structure.py)
+・epubでも出力できるように追加。(kindleunpack.py、unpack_structure.py)
+・Imagesディレクトリを出力できるように追加。(kindleunpack.py、unpack_structure.py)
 ・DumpAZW6で出力したHD画像を取り込むように追加。(unpack_structure.py)
 ・S-JISに存在しないUnicode文字の表示がWindows環境でエラーが出ないように対策。(mobi_header.py)
 
 ■その他
 出力されるファル名は、
-[作者名] 作品名.zip(.epub)
+[作者名] 作品名(.zip/.epub)
 になります。
 作者名は複数作者の場合 & で繋げるようになっています。
 作品名はTitleを使用します。
@@ -66,7 +73,7 @@ KindleUnpack - KindleUnpack/lib
 
 出力ファイル名を変えたければ、
 KindleUnpack/lib/kindleunpack.py
-の625行からの部分を変更してください。
+の641行からの部分を変更してください。
 
 ■使用したもの等
 DeDRM_tools 6.7.0
@@ -90,6 +97,14 @@ http://rio2016.5ch.net/test/read.cgi/ebooks/1526467330/395
 GNU General Public License v3.0
 
 ■履歴
+2020/03/xx v.0.3
+・Python3での実行に対応。
+・-zでzipを出力できるように追加。
+・-fでImagesディレクトリを出力できるように追加。
+・-eのepub出力をzip出力と排他的にならないように変更。
+・-cでzip出力時に圧縮出来るように追加。
+・html.entitiesがimport出来ずエラーになるのを修正。
+
 2020/03/25 v.0.2
 ・S-JISに存在しないUnicode文字が作者名/作品名に含まれていた場合、出力ファイル名が数値文字参照になっていたのを修正。
 ・-dオプションを付けた場合、Windows環境で上記の時エラーになっていたのを対策。

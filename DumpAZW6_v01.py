@@ -6,6 +6,10 @@ import sys
 import os, getopt, struct
 import imghdr
 
+PY2 = sys.version_info[0] == 2
+if PY2:
+    range = xrange
+
 def get_image_type(imgname, imgdata=None):
     imgtype = imghdr.what(imgname, imgdata)
     if imgtype == "jpeg":
@@ -140,7 +144,10 @@ def dump_contexth(codec, extheader):
         content = extheader[pos + 8: pos + size]
         if id in id_map_strings.keys():
             name = id_map_strings[id]
-            print('\n    Key: "%s"\n        Value: "%s"' % (name, unicode(content, codec).encode("utf-8")))
+            if type(content) is str:
+                print('\n    Key: "%s"\n        Value: "%s"' % (name, unicode(content, codec).encode("utf-8")))
+            else:
+                print('\n    Key: "%s"\n        Value: "%s"' % (name, str(content, codec).encode("utf-8")))
         elif id in id_map_values.keys():
             name = id_map_values[id]
             if size == 9:
@@ -276,17 +283,16 @@ def usage(progname):
 
 def DumpAZW6(infile, outdir):
     infileext = os.path.splitext(infile)[1].upper()
-    print(infile, infileext)
     if infileext not in ['.AZW6'] and infileext not in ['.RES']:
         print("Error: first parameter must be a Kindle AZW6 HD container file.")
         return 1
 
     try:
         # make sure it is really an hd container file
-        contdata = file(infile, 'rb').read()
+        contdata = open(infile, 'rb').read()
         palmheader = contdata[0:78]
         ident = palmheader[0x3C:0x3C+8]
-        if ident != 'RBINCONT':
+        if ident != b'RBINCONT':
             raise dumpHeaderException('invalid file format')
 
         headers = {}
@@ -301,15 +307,15 @@ def DumpAZW6(infile, outdir):
         # now dump a basic sector map of the palmdb
         n = pp.getnumsections()
         dtmap = {
-            "FONT": "FONT",
-            "RESC": "RESC",
-            "CRES": "CRES",
-            "CONT": "CONT",
-            chr(0xa0) + chr(0xa0) + chr(0xa0) + chr(0xa0): "Empty_Image/Resource_Placeholder",
-            chr(0xe9) + chr(0x8e) + "\r\n" : "EOF_RECORD",
+            b"FONT": "FONT",
+            b"RESC": "RESC",
+            b"CRES": "CRES",
+            b"CONT": "CONT",
+            b"\xa0\xa0\xa0\xa0" : "Empty_Image/Resource_Placeholder",
+            b"\xe9\x8e\x0d\x0a" : "EOF_RECORD",
             }
         dtmap2 = {
-            "kindle:embed" : "KINDLE:EMBED",
+            b"kindle:embed" : "KINDLE:EMBED",
         }
         tr = -1
         off = -1
@@ -318,7 +324,7 @@ def DumpAZW6(infile, outdir):
         print("\nMap of Palm DB Sections")
         print("    Dec  - Hex : Description")
         print("    ---- - ----  -----------")
-        for i in xrange(n):
+        for i in range(n):
             before, after = pp.getsecaddr(i)
             data = pp.readsection(i)
             dlen = len(data)
@@ -326,7 +332,10 @@ def DumpAZW6(infile, outdir):
             dtext = data[0:12]
             desc = '' 
             if dtext in dtmap2.keys():
-                desc = data
+                if type(data) is str:
+                    desc = data
+                else:
+                    desc = data.decode('utf-8')
                 linkhrefs = []
                 hreflist = desc.split('|')
                 for href in hreflist:
@@ -335,9 +344,9 @@ def DumpAZW6(infile, outdir):
                 desc = "\n" + "\n".join(linkhrefs)
             elif dt in dtmap.keys():
                 desc = dtmap[dt]
-                if dt == "CONT":
+                if dt == b"CONT":
                     desc="Cont Header"
-                elif dt == "CRES":
+                elif dt == b"CRES":
                     processCRES(i, data, outdir)
             else:
                 desc = dtext.encode('hex')

@@ -12,11 +12,6 @@ import os
 import os.path
 import struct
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
 from Crypto.Cipher import AES
 from Crypto.Util.py3compat import bchr, bord
 

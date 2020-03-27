@@ -4,10 +4,10 @@
 
 from __future__ import unicode_literals, division, absolute_import, print_function
 
-from .compatibility_utils import text_type
+from compatibility_utils import text_type
 
-from . import unipath
-from .unipath import pathof
+import unipath
+from unipath import pathof
 
 DUMP = False
 """ Set to True to dump all possible information. """
@@ -20,7 +20,7 @@ import re
 
 import zipfile
 import binascii
-from .mobi_utils import mangle_fonts
+from mobi_utils import mangle_fonts
 
 import distutils
 from distutils import dir_util
@@ -56,6 +56,9 @@ class fileNames:
 
     def getInputFileBasename(self):
         return os.path.splitext(os.path.basename(self.infile))[0]
+
+    def getOutputDir(self):
+        return self.outdir
 
     def makeK8Struct(self):
         self.k8dir = os.path.join(self.outdir,'mobi8')
@@ -107,12 +110,7 @@ class fileNames:
 
     def makeEPUB(self, usedmap, obfuscate_data, uid, output_epub, fname, cover_offset):
         if output_epub:
-            bname = os.path.join(self.outdir, '../' + fname + '.epub')
-            fname_txt = os.path.join(self.outdir, 'fname.txt')
-            f = open(fname_txt, 'wb')
-            f.write(fname.encode('utf-8'))
-            f.write('.epub')
-            f.close()
+            bname = os.path.join(self.outdir, '..', fname + '.epub')
         else:
             bname = os.path.join(self.k8dir, self.getInputFileBasename() + '.epub')
 
@@ -194,14 +192,8 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         self.zipUpDir(self.outzip,self.k8dir,'OEBPS')
         self.outzip.close()
 
-    def makeZip(self, fname, cover_offset):
-        bname = os.path.join(self.outdir, '../' + fname + '.zip')
-
-        fname_txt = os.path.join(self.outdir, 'fname.txt')
-        f = open(fname_txt, 'wb')
-        f.write(fname.encode('utf-8'))
-        f.write('.zip')
-        f.close()
+    def makeZip(self, fname, cover_offset, zip_compress = False):
+        bname = os.path.join(self.outdir, '..', fname + '.zip')
 
         # ready to build zip
         self.outzip = zipfile.ZipFile(pathof(bname), 'w')
@@ -214,10 +206,29 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         # HDイメージ差し替え
         replaceHDimages(self.HDimages, self.zipdir, cover_offset)
         
-        # 無圧縮zipで作成
-        # self.zipUpDir(self.outzip, self.zipdir, '') # 圧縮するときはこっち
-        self.zipUpDir(self.outzip, self.zipdir, '', zipfile.ZIP_STORED)
+        # zip作成
+        if zip_compress:
+            self.zipUpDir(self.outzip, self.zipdir, '')
+        else:
+            self.zipUpDir(self.outzip, self.zipdir, '', zipfile.ZIP_STORED)
         self.outzip.close()
+
+    def makeImages(self, fname, cover_offset):
+        bname = os.path.join(self.outdir, '..', fname)
+        if not unipath.exists(bname):
+            unipath.mkdir(bname)
+        #bname = os.path.join(bname, "Images")
+        #if not unipath.exists(bname):
+        #    unipath.mkdir(bname)
+
+        # ready to build images
+        if unipath.exists(self.k8images):
+            distutils.dir_util.copy_tree(self.k8images, bname)
+        else:
+            distutils.dir_util.copy_tree(self.imgdir, bname)
+
+        # HDイメージ差し替え
+        replaceHDimages(self.HDimages, bname, cover_offset)
 
 def replaceHDimages(src_dir, dest_dir, cover_offset):
     # HDイメージ差し替え

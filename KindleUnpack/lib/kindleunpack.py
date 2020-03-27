@@ -12,16 +12,16 @@ import sys
 import codecs
 import traceback
 
-from .compatibility_utils import PY2, binary_type, utf8_str, unicode_str, unescapeit
-from .compatibility_utils import unicode_argv, add_cp65001_codec
-from .compatibility_utils import hexlify
+from compatibility_utils import PY2, binary_type, utf8_str, unicode_str, unescapeit
+from compatibility_utils import unicode_argv, add_cp65001_codec
+from compatibility_utils import hexlify
 import safefilename
 
 from xml.sax.saxutils import escape as xmlescape
 
 add_cp65001_codec()
 
-from .unipath import pathof
+from unipath import pathof
 
 if PY2:
     range = xrange
@@ -159,7 +159,10 @@ CREATE_COVER_PAGE = True  # XXX experimental
 """ Create and insert a cover xhtml page. """
 
 UPDATED_TITLE = False
+COMPRESS_ZIP = False
+OUTPUT_ZIP = True
 OUTPUT_EPUB = False
+OUTPUT_IMAGES = False
 
 EOF_RECORD = b'\xe9\x8e' + b'\r\n'
 """ The EOF record content. """
@@ -188,20 +191,20 @@ class unpackException(Exception):
 
 
 # import the kindleunpack support libraries
-from .unpack_structure import fileNames
-from .mobi_sectioner import Sectionizer, describe
-from .mobi_header import MobiHeader, dump_contexth
-from .mobi_utils import toBase32
-from .mobi_opf import OPFProcessor
-from .mobi_html import HTMLProcessor, XHTMLK8Processor
-from .mobi_ncx import ncxExtract
-from .mobi_k8proc import K8Processor
-from .mobi_split import mobi_split
-from .mobi_k8resc import K8RESCProcessor
-from .mobi_nav import NAVProcessor
-from .mobi_cover import CoverProcessor, get_image_type
-from .mobi_pagemap import PageMapProcessor
-from .mobi_dict import dictSupport
+from unpack_structure import fileNames
+from mobi_sectioner import Sectionizer, describe
+from mobi_header import MobiHeader, dump_contexth
+from mobi_utils import toBase32
+from mobi_opf import OPFProcessor
+from mobi_html import HTMLProcessor, XHTMLK8Processor
+from mobi_ncx import ncxExtract
+from mobi_k8proc import K8Processor
+from mobi_split import mobi_split
+from mobi_k8resc import K8RESCProcessor
+from mobi_nav import NAVProcessor
+from mobi_cover import CoverProcessor, get_image_type
+from mobi_pagemap import PageMapProcessor
+from mobi_dict import dictSupport
 
 
 def processSRCS(i, files, rscnames, sect, data):
@@ -612,6 +615,8 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
 
 
 def processZip(mh, files):
+    global COMPRESS_ZIP
+
     # make a zip
     print("Creating a Zip file")
     
@@ -620,7 +625,18 @@ def processZip(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeZip(makeOutputFileName(mh), cover_offset)
+    files.makeZip(makeOutputFileName(mh), cover_offset, COMPRESS_ZIP)
+
+def processImages(mh, files):
+    # make a images
+    print("Creating an Images directory")
+    
+    # 表紙の番号取得
+    cover_offset = int(mh.metadata.get('CoverOffset', ['-1'])[0])
+    if not CREATE_COVER_PAGE:
+        cover_offset = None
+
+    files.makeImages(makeOutputFileName(mh), cover_offset)
 
 def makeOutputFileName(mh):
     global UPDATED_TITLE
@@ -892,13 +908,21 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
         processUnknownSections(mh, sect, files, K8Boundary)
 
         # Zip
-        if not OUTPUT_EPUB:
+        if OUTPUT_ZIP:
             processZip(mh, files)
+
+        if OUTPUT_IMAGES:
+            processImages(mh, files)
+
+        fname_txt = os.path.join(files.getOutputDir(), 'fname.txt')
+        f = open(fname_txt, 'wb')
+        f.write(makeOutputFileName(mh).encode('utf-8'))
+        f.close()
 
     return
 
 
-def unpackBook(infile, outdir, apnxfile=None, epubver='2', use_hd=False, dodump=False, dowriteraw=False, dosplitcombos=False):
+def unpackBook(infile, outdir, apnxfile=None, epubver='A', use_hd=False, dodump=False, dowriteraw=False, dosplitcombos=False):
     global DUMP
     global WRITE_RAW_DATA
     global SPLIT_COMBO_MOBIS
@@ -997,12 +1021,18 @@ def usage(progname):
     print("    -r                 write raw data to the output folder")
 
 
-def kindleunpack(infile, outdir, update_title = False, output_epub = False):
+def kindleunpack(infile, outdir, update_title = False, compress_zip = False, output_zip = True, output_epub = False, output_images = False):
     global UPDATED_TITLE
+    global COMPRESS_ZIP
+    global OUTPUT_ZIP
     global OUTPUT_EPUB
+    global OUTPUT_IMAGES
 
     UPDATED_TITLE = update_title
+    COMPRESS_ZIP = compress_zip
+    OUTPUT_ZIP = output_zip
     OUTPUT_EPUB = output_epub
+    OUTPUT_IMAGES = output_images
     try:
         print('Unpacking Book...')
         unpackBook(infile, outdir, None, 'A', True)
@@ -1046,7 +1076,10 @@ def main(argv=unicode_argv()):
     epubver = '2'
     use_hd = False
     UPDATED_TITLE = False
+    COMPRESS_ZIP = False
+    OUTPUT_ZIP = True
     OUTPUT_EPUB = False
+    OUTPUT_IMAGES = False
 
     for o, a in opts:
         if o == "-h":
@@ -1062,8 +1095,14 @@ def main(argv=unicode_argv()):
             SPLIT_COMBO_MOBIS = True
         if o == "-t":
             UPDATED_TITLE = True
+        if o == "-c":
+            COMPRESS_ZIP = True
+        if o == "-z":
+            OUTPUT_ZIP = True
         if o == "-e":
             OUTPUT_EPUB = True
+        if o == "-f":
+            OUTPUT_IMAGES = True
         if o == "-p":
             apnxfile = a
         if o == "--epub_version":

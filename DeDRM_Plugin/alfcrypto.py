@@ -272,7 +272,18 @@ class KeyIVGen(object):
         def xorstr( a, b ):
             if len(a) != len(b):
                 raise Exception("xorstr(): lengths differ")
-            return ''.join((chr(ord(x)^ord(y)) for x, y in zip(a, b)))
+            ret = b''
+            for x, y in zip(a, b):
+                if type(x) is str:
+                    ox = ord(x)
+                else:
+                    ox = x
+                if type(y) is str:
+                    oy = ord(y)
+                else:
+                    oy = y
+                ret += pack("B", ox ^ oy)
+            return ret
 
         def prf( h, data ):
             hm = h.copy()
@@ -280,7 +291,7 @@ class KeyIVGen(object):
             return hm.digest()
 
         def pbkdf2_F( h, salt, itercount, blocknum ):
-            U = prf( h, salt + pack('>i',blocknum ) )
+            U = prf( h, (salt + pack('>i',blocknum ).decode()).encode('utf-8') )
             T = U
             for i in range(2, itercount+1):
                 U = prf( h, U )
@@ -290,11 +301,11 @@ class KeyIVGen(object):
         sha = hashlib.sha1
         digest_size = sha().digest_size
         # l - number of output blocks to produce
-        l = keylen / digest_size
+        l = keylen // digest_size
         if keylen % digest_size != 0:
             l += 1
-        h = hmac.new( passwd, None, sha )
-        T = ""
+        h = hmac.new( bytearray(passwd, "ASCII"), None, sha )
+        T = b""
         for i in range(1, l+1):
             T += pbkdf2_F( h, salt, iter, i )
         return T[0: keylen]

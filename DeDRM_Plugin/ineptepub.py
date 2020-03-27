@@ -320,7 +320,7 @@ def _load_crypto_pycrypto():
             self._rsa = _RSA.construct(key)
 
         def bytesToNumber(self, bytes):
-            total = 0L
+            total = six.long(0)
             for byte in bytes:
                 total = (total << 8) + byte
             return total
@@ -405,7 +405,7 @@ def decryptBook(userkey, inpath, outpath):
         namelist = set(inf.namelist())
         if 'META-INF/rights.xml' not in namelist or \
            'META-INF/encryption.xml' not in namelist:
-            print u"{0:s} is DRM-free.".format(os.path.basename(inpath))
+            print(u"{0:s} is DRM-free.".format(os.path.basename(inpath)))
             return 1
         for name in META_NAMES:
             namelist.remove(name)
@@ -415,12 +415,12 @@ def decryptBook(userkey, inpath, outpath):
             expr = './/%s' % (adept('encryptedKey'),)
             bookkey = ''.join(rights.findtext(expr))
             if len(bookkey) != 172:
-                print u"{0:s} is not a secure Adobe Adept ePub.".format(os.path.basename(inpath))
+                print(u"{0:s} is not a secure Adobe Adept ePub.".format(os.path.basename(inpath)))
                 return 1
             bookkey = rsa.decrypt(bookkey.decode('base64'))
             # Padded as per RSAES-PKCS1-v1_5
             if bookkey[-17] != '\x00':
-                print u"Could not decrypt {0:s}. Wrong key".format(os.path.basename(inpath))
+                print(u"Could not decrypt {0:s}. Wrong key".format(os.path.basename(inpath)))
                 return 2
             encryption = inf.read('META-INF/encryption.xml')
             decryptor = Decryptor(bookkey[-16:], encryption)
@@ -461,7 +461,7 @@ def decryptBook(userkey, inpath, outpath):
                         pass
                     outf.writestr(zi, decryptor.decrypt(path, data))
         except:
-            print u"Could not decrypt {0:s} because of an exception:\n{1:s}".format(os.path.basename(inpath), traceback.format_exc())
+            print(u"Could not decrypt {0:s} because of an exception:\n{1:s}".format(os.path.basename(inpath), traceback.format_exc()))
             return 2
     return 0
 
@@ -472,13 +472,13 @@ def cli_main():
     argv=unicode_argv()
     progname = os.path.basename(argv[0])
     if len(argv) != 4:
-        print u"usage: {0} <keyfile.der> <inbook.epub> <outbook.epub>".format(progname)
+        print(u"usage: {0} <keyfile.der> <inbook.epub> <outbook.epub>".format(progname))
         return 1
     keypath, inpath, outpath = argv[1:]
     userkey = open(keypath,'rb').read()
     result = decryptBook(userkey, inpath, outpath)
     if result == 0:
-        print u"Successfully decrypted {0:s} as {1:s}".format(os.path.basename(inpath),os.path.basename(outpath))
+        print(u"Successfully decrypted {0:s} as {1:s}".format(os.path.basename(inpath),os.path.basename(outpath)))
     return result
 
 def gui_main():
@@ -579,7 +579,7 @@ def gui_main():
             self.status['text'] = u"Decrypting..."
             try:
                 decrypt_status = decryptBook(userkey, inpath, outpath)
-            except Exception, e:
+            except Exception as e:
                 self.status['text'] = u"Error: {0}".format(e.args[0])
                 return
             if decrypt_status == 0:

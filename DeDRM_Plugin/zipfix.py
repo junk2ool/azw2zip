@@ -171,7 +171,7 @@ def repairBook(infile, outfile):
         fr = fixZip(infile, outfile)
         fr.fix()
         return 0
-    except Exception, e:
+    except Exception as e:
         print("Error Occurred ", e)
         return 2
 

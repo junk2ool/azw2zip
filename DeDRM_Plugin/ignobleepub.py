@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import with_statement
+from __future__ import print_function
 
 # ignobleepub.pyw, version 4.1
 # Copyright © 2009-2010 by i♥cabbages
@@ -41,7 +42,6 @@ from __future__ import with_statement
 """
 Decrypt Barnes & Noble encrypted ePub books.
 """
-from __future__ import print_function
 
 __license__ = 'GPL v3'
 __version__ = "4.1"
@@ -434,7 +434,7 @@ def gui_main():
             self.status['text'] = u"Decrypting..."
             try:
                 decrypt_status = decryptBook(userkey, inpath, outpath)
-            except Exception, e:
+            except Exception as e:
                 self.status['text'] = u"Error: {0}".format(e.args[0])
                 return
             if decrypt_status == 0:

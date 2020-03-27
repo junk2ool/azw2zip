@@ -83,6 +83,10 @@ try:
 except:
     print(u"AlfCrypto not found. Using python PC1 implementation.")
 
+PY2 = sys.version_info[0] == 2
+if PY2:
+    range = xrange
+
 # Wrap a stream so that output gets flushed immediately
 # and also make sure that any unicode strings get
 # encoded using "replace" before writing them.
@@ -167,33 +171,42 @@ def PC1(key, src, decryption=True):
     if len(key)!=16:
          DrmException (u"PC1: Bad key length")
     wkey = []
-    for i in xrange(8):
-        wkey.append(ord(key[i*2])<<8 | ord(key[i*2+1]))
-    dst = ""
-    for i in xrange(len(src)):
+    for i in range(8):
+        if type(key) is str:
+            wkey.append(ord(key[i*2])<<8 | ord(key[i*2+1]))
+        else:
+            wkey.append(key[i*2]<<8 | key[i*2+1])
+    dst = b""
+    for i in range(len(src)):
         temp1 = 0;
         byteXorVal = 0;
-        for j in xrange(8):
+        for j in range(8):
             temp1 ^= wkey[j]
             sum2  = (sum2+j)*20021 + sum1
             sum1  = (temp1*346)&0xFFFF
             sum2  = (sum2+sum1)&0xFFFF
             temp1 = (temp1*20021+1)&0xFFFF
             byteXorVal ^= temp1 ^ sum2
-        curByte = ord(src[i])
+        if type(src) is str:
+            curByte = ord(src[i])
+        else:
+            curByte = src[i]
         if not decryption:
             keyXorVal = curByte * 257;
         curByte = ((curByte ^ (byteXorVal >> 8)) ^ byteXorVal) & 0xFF
         if decryption:
             keyXorVal = curByte * 257;
-        for j in xrange(8):
+        for j in range(8):
             wkey[j] ^= keyXorVal;
-        dst+=chr(curByte)
+        if type(dst) is str:
+            dst+=chr(curByte)
+        else:
+            dst+=struct.pack("B", curByte)
     return dst
 
 def checksumPid(s):
     letters = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789'
-    crc = (~binascii.crc32(s,-1))&0xFFFFFFFF
+    crc = (~binascii.crc32(s.encode(encoding='utf-8'),-1))&0xFFFFFFFF
     crc = crc ^ (crc >> 16)
     res = s
     l = len(letters)
@@ -210,7 +223,10 @@ def getSizeOfTrailingDataEntries(ptr, size, flags):
         if size <= 0:
             return result
         while True:
-            v = ord(ptr[size-1])
+            if type(ptr) is str:
+                v = ord(ptr[size-1])
+            else:
+                v = ptr[size-1]
             result |= (v & 0x7F) << bitpos
             bitpos += 7
             size -= 1
@@ -226,7 +242,10 @@ def getSizeOfTrailingDataEntries(ptr, size, flags):
     # if multibyte data is included in the encryped data, we'll
     # have already cleared this flag.
     if flags & 1:
-        num += (ord(ptr[size - num - 1]) & 0x3) + 1
+        if type(ptr) is str:
+            num += (ord(ptr[size - num - 1]) & 0x3) + 1
+        else:
+            num += (ptr[size - num - 1] & 0x3) + 1
     return num
 
 
@@ -253,10 +272,10 @@ class MobiBook:
             print(u"AlfCrypto not found. Using python PC1 implementation.")
 
         # initial sanity check on file
-        self.data_file = file(infile, 'rb').read()
+        self.data_file = open(infile, 'rb').read()
         self.mobi_data = ''
         self.header = self.data_file[0:78]
-        if self.header[0x3C:0x3C+8] != 'BOOKMOBI' and self.header[0x3C:0x3C+8] != 'TEXtREAd':
+        if self.header[0x3C:0x3C+8] != b'BOOKMOBI' and self.header[0x3C:0x3C+8] != b'TEXtREAd':
             raise DrmException(u"Invalid file format")
         self.magic = self.header[0x3C:0x3C+8]
         self.crypto_type = -1
@@ -264,7 +283,7 @@ class MobiBook:
         # build up section offset and flag info
         self.num_sections, = struct.unpack('>H', self.header[76:78])
         self.sections = []
-        for i in xrange(self.num_sections):
+        for i in range(self.num_sections):
             offset, a1,a2,a3,a4 = struct.unpack('>LBBBB', self.data_file[78+i*8:78+i*8+8])
             flags, val = a1, a2<<16|a3<<8|a4
             self.sections.append( (offset, flags, val) )
@@ -282,7 +301,7 @@ class MobiBook:
         self.mobi_codepage = 1252
         self.mobi_version = -1
 
-        if self.magic == 'TEXtREAd':
+        if self.magic == b'TEXtREAd':
             print(u"PalmDoc format book detected.")
             return
 
@@ -304,20 +323,20 @@ class MobiBook:
             exth = ''
             if exth_flag & 0x40:
                 exth = self.sect[16 + self.mobi_length:]
-            if (len(exth) >= 12) and (exth[:4] == 'EXTH'):
+            if (len(exth) >= 12) and (exth[:4] == b'EXTH'):
                 nitems, = struct.unpack('>I', exth[8:12])
                 pos = 12
-                for i in xrange(nitems):
+                for i in range(nitems):
                     type, size = struct.unpack('>II', exth[pos: pos + 8])
                     content = exth[pos + 8: pos + size]
                     self.meta_array[type] = content
                     # reset the text to speech flag and clipping limit, if present
                     if type == 401 and size == 9:
                         # set clipping limit to 100%
-                        self.patchSection(0, '\144', 16 + self.mobi_length + pos + 8)
+                        self.patchSection(0, b'\144', 16 + self.mobi_length + pos + 8)
                     elif type == 404 and size == 9:
                         # make sure text to speech is enabled
-                        self.patchSection(0, '\0', 16 + self.mobi_length + pos + 8)
+                        self.patchSection(0, b'\0', 16 + self.mobi_length + pos + 8)
                     # print type, size, content, content.encode('hex')
                     pos += size
         except:
@@ -330,7 +349,7 @@ class MobiBook:
         }
         title = ''
         codec = 'windows-1252'
-        if self.magic == 'BOOKMOBI':
+        if self.magic == b'BOOKMOBI':
             if 503 in self.meta_array:
                 title = self.meta_array[503]
             else:
@@ -341,8 +360,11 @@ class MobiBook:
                 codec = codec_map[self.mobi_codepage]
         if title == '':
             title = self.header[:32]
-            title = title.split('\0')[0]
-        return unicode(title, codec)
+            title = title.split(b'\0')[0]
+        if type(title) is str:
+            return unicode(title, codec)
+        else:
+            return title.decode(codec)
 
     def getPIDMetaInfo(self):
         rec209 = ''
@@ -353,10 +375,13 @@ class MobiBook:
             # The 209 data comes in five byte groups. Interpret the last four bytes
             # of each group as a big endian unsigned integer to get a key value
             # if that key exists in the meta_array, append its contents to the token
-            for i in xrange(0,len(data),5):
+            for i in range(0,len(data),5):
                 val,  = struct.unpack('>I',data[i+1:i+5])
                 sval = self.meta_array.get(val,'')
-                token += sval
+                if type(sval) is str:
+                    token += sval
+                else:
+                    token += sval.decode()
         return rec209, token
 
     def patch(self, off, new):
@@ -373,14 +398,17 @@ class MobiBook:
 
     def parseDRM(self, data, count, pidlist):
         found_key = None
-        keyvec1 = '\x72\x38\x33\xB0\xB4\xF2\xE3\xCA\xDF\x09\x01\xD6\xE2\xE0\x3F\x96'
+        keyvec1 = b'\x72\x38\x33\xB0\xB4\xF2\xE3\xCA\xDF\x09\x01\xD6\xE2\xE0\x3F\x96'
         for pid in pidlist:
             bigpid = pid.ljust(16,'\0')
             temp_key = PC1(keyvec1, bigpid, False)
-            temp_key_sum = sum(map(ord,temp_key)) & 0xff
+            if type(temp_key) is str:
+                temp_key_sum = sum(map(ord,temp_key)) & 0xff
+            else:
+                temp_key_sum = sum(map(int,temp_key)) & 0xff
             found_key = None
-            for i in xrange(count):
-                verification, size, type, cksum, cookie = struct.unpack('>LLLBxxx32s', data[i*0x30:i*0x30+0x30])
+            for i in range(count):
+                verification, size, type2, cksum, cookie = struct.unpack('>LLLBxxx32s', data[i*0x30:i*0x30+0x30])
                 if cksum == temp_key_sum:
                     cookie = PC1(temp_key, cookie)
                     ver,flags,finalkey,expiry,expiry2 = struct.unpack('>LL16sLL', cookie)
@@ -393,19 +421,25 @@ class MobiBook:
             # Then try the default encoding that doesn't require a PID
             pid = '00000000'
             temp_key = keyvec1
-            temp_key_sum = sum(map(ord,temp_key)) & 0xff
-            for i in xrange(count):
-                verification, size, type, cksum, cookie = struct.unpack('>LLLBxxx32s', data[i*0x30:i*0x30+0x30])
+            if type(temp_key) is str:
+                temp_key_sum = sum(map(ord,temp_key)) & 0xff
+            else:
+                temp_key_sum = sum(map(int,temp_key)) & 0xff
+            for i in range(count):
+                verification, size, type2, cksum, cookie = struct.unpack('>LLLBxxx32s', data[i*0x30:i*0x30+0x30])
                 if cksum == temp_key_sum:
                     cookie = PC1(temp_key, cookie)
-                    ver,flags,finalkey,expiry,expiry2 = struct.unpack('>LL16sLL', cookie)
-                    if verification == ver:
+                    if PY2:
+                        ver,flags,finalkey,expiry,expiry2 = struct.unpack('>LL16sLL', cookie)
+                    else:
+                        ver,flags,finalkey,expiry,expiry2 = struct.unpack('>LL16sLL', cookie.encode(encoding='utf-8'))
+                    if verification == ver and (flags & 0x1F) == 1:
                         found_key = finalkey
                         break
         return [found_key,pid]
 
     def getFile(self, outpath):
-        file(outpath,'wb').write(self.mobi_data)
+        open(outpath,'wb').write(self.mobi_data)
 
     def getBookType(self):
         if self.print_replica:
@@ -453,8 +487,8 @@ class MobiBook:
                 print(u"Warning: PID {0} has wrong number of digits".format(pid))
 
         if self.crypto_type == 1:
-            t1_keyvec = 'QDCVEPMU675RUBSZ'
-            if self.magic == 'TEXtREAd':
+            t1_keyvec = b'QDCVEPMU675RUBSZ'
+            if self.magic == b'TEXtREAd':
                 bookkey_data = self.sect[0x0E:0x0E+16]
             elif self.mobi_version < 0:
                 bookkey_data = self.sect[0x90:0x90+16]
@@ -471,9 +505,9 @@ class MobiBook:
             if not found_key:
                 raise DrmException(u"No key found in {0:d} keys tried.".format(len(goodpids)))
             # kill the drm keys
-            self.patchSection(0, '\0' * drm_size, drm_ptr)
+            self.patchSection(0, b'\0' * drm_size, drm_ptr)
             # kill the drm pointers
-            self.patchSection(0, '\xff' * 4 + '\0' * 12, 0xA8)
+            self.patchSection(0, b'\xff' * 4 + b'\0' * 12, 0xA8)
 
         if pid=='00000000':
             print(u"File has default encryption, no specific key needed.")
@@ -481,27 +515,27 @@ class MobiBook:
             print(u"File is encoded with PID {0}.".format(checksumPid(pid)))
 
         # clear the crypto type
-        self.patchSection(0, "\0" * 2, 0xC)
+        self.patchSection(0, b"\0" * 2, 0xC)
 
         # decrypt sections
         print(u"Decrypting. Please wait . . .", end=' ')
         mobidataList = []
         mobidataList.append(self.data_file[:self.sections[1][0]])
-        for i in xrange(1, self.records+1):
+        for i in range(1, self.records+1):
             data = self.loadSection(i)
             extra_size = getSizeOfTrailingDataEntries(data, len(data), self.extra_data_flags)
             if i%100 == 0:
                 print(u".", end=' ')
-            # print "record %d, extra_size %d" %(i,extra_size)
+            # print("record %d, extra_size %d" %(i,extra_size))
             decoded_data = PC1(found_key, data[0:len(data) - extra_size])
             if i==1:
-                self.print_replica = (decoded_data[0:4] == '%MOP')
+                self.print_replica = (decoded_data[0:4] == b'%MOP')
             mobidataList.append(decoded_data)
             if extra_size > 0:
                 mobidataList.append(data[-extra_size:])
         if self.num_sections > self.records+1:
             mobidataList.append(self.data_file[self.sections[self.records+1][0]:])
-        self.mobi_data = "".join(mobidataList)
+        self.mobi_data = b"".join(mobidataList)
         print(u"done")
         return
 
@@ -531,8 +565,8 @@ def cli_main():
             pidlist = []
         try:
             stripped_file = getUnencryptedBook(infile, pidlist)
-            file(outfile, 'wb').write(stripped_file)
-        except DrmException, e:
+            open(outfile, 'wb').write(stripped_file)
+        except DrmException as e:
             print(u"MobiDeDRM v{0} Error: {1:s}".format(__version__,e.args[0]))
             return 1
     return 0

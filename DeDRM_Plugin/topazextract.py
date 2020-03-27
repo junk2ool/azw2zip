@@ -319,7 +319,7 @@ class TopazBook:
         fixedimage=True
         try:
             keydata = self.getBookPayloadRecord('dkey', 0)
-        except DrmException, e:
+        except DrmException as e:
             print(u"no dkey record found, book may not be encrypted")
             print(u"attempting to extrct files without a book key")
             self.createBookDirectory()
@@ -345,7 +345,7 @@ class TopazBook:
             data = keydata
             try:
                 bookKeys+=decryptDkeyRecords(data,pid)
-            except DrmException, e:
+            except DrmException as e:
                 pass
             else:
                 bookKey = bookKeys[0]
@@ -454,7 +454,7 @@ def cli_main():
 
     try:
         opts, args = getopt.getopt(argv[1:], "k:p:s:x")
-    except getopt.GetoptError, err:
+    except getopt.GetoptError as err:
         print(u"Error in options or arguments: {0}".format(err.args[0]))
         usage(progname)
         return 1
@@ -513,7 +513,7 @@ def cli_main():
         # removing internal temporary directory of pieces
         tb.cleanup()
 
-    except DrmException, e:
+    except DrmException as e:
         print(u"Decryption failed\n{0}".format(traceback.format_exc()))
 
         try:
@@ -522,7 +522,7 @@ def cli_main():
             pass
         return 1
 
-    except Exception, e:
+    except Exception as e:
         print(u"Decryption failed\m{0}".format(traceback.format_exc()))
         try:
             tb.cleanup()

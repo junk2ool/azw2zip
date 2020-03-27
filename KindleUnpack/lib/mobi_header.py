@@ -12,7 +12,7 @@ if DEBUG_USE_ORDERED_DICTIONARY:
 else:
     dict_ = dict
 
-from .compatibility_utils import PY2, unicode_str, hexlify, bord
+from compatibility_utils import PY2, unicode_str, hexlify, bord
 
 if PY2:
     range = xrange
@@ -21,8 +21,8 @@ import struct
 import uuid
 
 # import the mobiunpack support libraries
-from .mobi_utils import getLanguage
-from .mobi_uncompress import HuffcdicReader, PalmdocReader, UncompressedReader
+from mobi_utils import getLanguage
+from mobi_uncompress import HuffcdicReader, PalmdocReader, UncompressedReader
 
 class unpackException(Exception):
     pass

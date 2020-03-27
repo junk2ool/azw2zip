@@ -10,10 +10,9 @@ import glob
 import shutil
 import random
 import string
-import io
 
 __license__ = 'GPL v3'
-__version__ = u"0.2"
+__version__ = u"0.3"
 
 sys.path.append(os.path.join(sys.path[0], "DeDRM_Plugin"))
 sys.path.append(os.path.join(sys.path[0], 'KindleUnpack', 'lib'))
@@ -43,12 +42,17 @@ def usage(progname):
     print(u"  azw to zip or EPUB file.")
     print(u"  ")
     print(u"Usage:")
-    print(u"  {} [-t] [-d] <azw_indir> [outdir]".format(progname))
+    print(u"  {} [-z] [-e] [-f] [-t] [-c] [-d] <azw_indir> [outdir]".format(progname))
     print(u"  ")
     print(u"Options:")
-    print(u"  -t       ファイル名の作品名をUpdated_Titleを使用するように(calibreと同じ)")
-    print(u"  -e       zipではなくepubを出力するように")
-    print(u"  -d       デバッグモード(標準ログ表示＆作業ディレクトリ消さない)")
+    print(u"  -z        zipを出力(出力形式省略時のデフォルト)")
+    print(u"  -e        epubを出力")
+    print(u"  -f        Imagesディレクトリを出力")
+    print(u"  -t        ファイル名の作品名にUpdated_Titleを使用する(calibreと同じ形式)")
+    print(u"  -c        zipでの出力時に圧縮をする")
+    print(u"  -d        デバッグモード(各ツールの標準出力表示＆作業ディレクトリ消さない)")
+    print(u"  azw_indir 変換する書籍のディレクトリ(再帰的に読み込みます)")
+    print(u"  outdir    出力先ディレクトリ(省略時は{}と同じディレクトリ)".format(progname))
 
 def find_all_files(directory):
     for root, dirs, files in os.walk(directory):
@@ -63,7 +67,7 @@ def main(argv=unicode_argv()):
     progname = os.path.basename(argv[0])
 
     try:
-        opts, args = getopt.getopt(argv[1:], "ted")
+        opts, args = getopt.getopt(argv[1:], "tczefd")
     except getopt.GetoptError as err:
         print(str(err))
         usage(progname)
@@ -77,14 +81,25 @@ def main(argv=unicode_argv()):
     # オプション解析
     debug_mode = False
     updated_title = False
+    output_zip = False
     output_epub = False
+    output_images = False
+    compress_zip = False
     for o, a in opts:
         if o == "-t":
             updated_title = True
+        if o == "-c":
+            compress_zip = True
+        if o == "-z":
+            output_zip = True
         if o == "-e":
             output_epub = True
+        if o == "-f":
+            output_images = True
         if o == "-d":
             debug_mode = True
+    if not output_zip and not output_epub and not output_images:
+        output_zip = True
 
     # k4i ディレクトリはスクリプトのディレクトリ
     k4i_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -105,6 +120,9 @@ def main(argv=unicode_argv()):
                 kindlekey.getkey(k4i_dir)
         k4i_files = glob.glob(os.path.join(k4i_dir, '*.k4i'))
         print(u"k4i作成: 完了: {}".format(k4i_files[0]))
+    else:
+        for k4i_fpath in k4i_files:
+            print(u"k4i: {}".format(k4i_fpath))
     
     # 処理ディレクトリ
     in_dir = args[0]
@@ -191,32 +209,44 @@ def main(argv=unicode_argv()):
             DeDRM_path = azw_path
 
         if DeDRM_path and kindleunpack.unipath.exists(DeDRM_path):
-            # zip/EPUB作成
-            output_format = "zip"
-            if output_epub:
-                output_format = "epub"
-            print(u"  {}変換: 開始: {}".format(output_format, DeDRM_path))
+            # 書籍変換
+            print(u"  書籍変換: 開始: {}".format(DeDRM_path))
 
             #unpack_dir = os.path.join(temp_dir, os.path.splitext(os.path.basename(DeDRM_path))[0])
             unpack_dir = temp_dir
             if debug_mode:
-                kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, output_epub)
+                kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, compress_zip, output_zip, output_epub, output_images)
             else:
                 with redirect_stdout(open(os.devnull, 'w')):
-                    kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, output_epub)
+                    kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, compress_zip, output_zip, output_epub, output_images)
 
-            # 作成したzip/EPUBのファイル名を取得
+            # 作成したファイル名を取得
             fname_path = os.path.join(temp_dir, "fname.txt")
             if kindleunpack.unipath.exists(fname_path):
                 fname_file = codecs.open(fname_path, 'r', 'utf-8')
                 fname_txt = fname_file.readline().rstrip()
-                try:
-                    print(u"  {}変換: 完了: {}".format(output_format, os.path.join(out_dir, fname_txt)))
-                except UnicodeEncodeError:
-                    print(u"  {}変換: 完了: {}".format(output_format, os.path.join(out_dir, fname_txt.encode('cp932', 'replace').decode('cp932'))))
                 fname_file.close()
+
+                output_fpath = os.path.join(out_dir, fname_txt + ".zip")
+                if kindleunpack.unipath.exists(output_fpath):
+                    try:
+                        print(u"  {}変換: 完了: {}".format("zip", output_fpath))
+                    except UnicodeEncodeError:
+                        print(u"  {}変換: 完了: {}".format("zip", output_fpath.encode('cp932', 'replace').decode('cp932')))
+                output_fpath = os.path.join(out_dir, fname_txt + ".epub")
+                if kindleunpack.unipath.exists(output_fpath):
+                    try:
+                        print(u"  {}変換: 完了: {}".format("epub", output_fpath))
+                    except UnicodeEncodeError:
+                        print(u"  {}変換: 完了: {}".format("epub", output_fpath.encode('cp932', 'replace').decode('cp932')))
+                output_fpath = os.path.join(out_dir, fname_txt)
+                if kindleunpack.unipath.exists(output_fpath):
+                    try:
+                        print(u"  {}変換: 完了: {}".format("Images", output_fpath))
+                    except UnicodeEncodeError:
+                        print(u"  {}変換: 完了: {}".format("Images", output_fpath.encode('cp932', 'replace').decode('cp932')))
             else:
-                print(u"  {}変換: 失敗:".format(output_format))
+                print(u"  書籍変換: 失敗:")
         else:
             print(u"  DRM解除: 失敗:")
 
@@ -225,7 +255,7 @@ def main(argv=unicode_argv()):
             print(u" 作業ディレクトリ: 削除: {}".format(temp_dir))
 
         print(u"変換完了: {}".format(azw_dir))
-    
+
     return 0
 
 if __name__ == '__main__':

@@ -5,6 +5,10 @@ import sys, os
 import locale
 import codecs
 
+PY2 = sys.version_info[0] == 2
+if PY2:
+    range = xrange
+
 # get sys.argv arguments and encode them into utf-8
 def unicode_argv():
     if sys.platform.startswith('win'):
@@ -34,7 +38,7 @@ def unicode_argv():
             # Remove Python executable and commands if present
             start = argc.value - len(sys.argv)
             return [argv[i] for i in
-                    xrange(start, argc.value)]
+                range(start, argc.value)]
         # if we don't have any arguments at all, just pass back script name
         # this should never happen
         return [u"DeDRM.py"]

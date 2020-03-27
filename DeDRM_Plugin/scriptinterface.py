@@ -46,7 +46,7 @@ def decryptepub(infile, outdir, rscpath):
                     if rv == 0:
                         print("Decrypted Adobe ePub with key file {0}".format(filename))
                         break
-                except Exception, e:
+                except Exception as e:
                     errlog += traceback.format_exc()
                     errlog += str(e)
                     rv = 1
@@ -66,7 +66,7 @@ def decryptepub(infile, outdir, rscpath):
                     if rv == 0:
                         print("Decrypted B&N ePub with key file {0}".format(filename))
                         break
-                except Exception, e:
+                except Exception as e:
                     errlog += traceback.format_exc()
                     errlog += str(e)
                     rv = 1
@@ -104,7 +104,7 @@ def decryptpdf(infile, outdir, rscpath):
                 rv = ineptpdf.decryptBook(userkey, infile, outfile)
                 if rv == 0:
                     break
-            except Exception, e:
+            except Exception as e:
                 errlog += traceback.format_exc()
                 errlog += str(e)
                 rv = 1
@@ -132,7 +132,7 @@ def decryptpdb(infile, outdir, rscpath):
                 return 1
             try:
                 rv = erdr2pml.decryptBook(infile, outpath, True, erdr2pml.getuser_key(name, cc8))
-            except Exception, e:
+            except Exception as e:
                 errlog += traceback.format_exc()
                 errlog += str(e)
                 rv = 1
@@ -193,7 +193,7 @@ def decryptk4mobi(infile, outdir, rscpath):
             androidFiles.append(dpath)
     try:
         rv = k4mobidedrm.decryptBook(infile, outdir, kDatabaseFiles, androidFiles, serialnums, pidnums)
-    except Exception, e:
+    except Exception as e:
         errlog += traceback.format_exc()
         errlog += str(e)
         rv = 1

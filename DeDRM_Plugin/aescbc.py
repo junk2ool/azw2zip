@@ -45,7 +45,15 @@ def xor(a,b):
     """ XOR two strings """
     x = []
     for i in range(min(len(a),len(b))):
-        x.append( chr(ord(a[i])^ord(b[i])))
+        if type(a) is str:
+            oa = ord(a[i])
+        else:
+            oa = a[i]
+        if type(b) is str:
+            ob = ord(b[i])
+        else:
+            ob = b[i]
+        x.append( chr(oa^ob))
     return ''.join(x)
 
 """
@@ -68,7 +76,7 @@ class BlockCipher:
         self.bytesToEncrypt = ''
     def resetDecrypt(self):
         self.decryptBlockCount = 0
-        self.bytesToDecrypt = ''
+        self.bytesToDecrypt = b''
 
     def encrypt(self, plainText, more = None):
         """ Encrypt a string and return a binary string """
@@ -101,7 +109,7 @@ class BlockCipher:
         numBlocks, numExtraBytes = divmod(len(self.bytesToDecrypt), self.blockSize)
         if more == None:  # no more calls to decrypt, should have all the data
             if numExtraBytes  != 0:
-                raise DecryptNotBlockAlignedError, 'Data not block aligned on decrypt'
+                raise DecryptNotBlockAlignedError('Data not block aligned on decrypt')
 
         # hold back some bytes in case last decrypt has zero len
         if (more != None) and (numExtraBytes == 0) and (numBlocks >0) :
@@ -143,7 +151,7 @@ class padWithPadLen(Pad):
     def removePad(self, paddedBinaryString, blockSize):
         """ Remove padding from a binary string """
         if not(0<len(paddedBinaryString)):
-            raise DecryptNotBlockAlignedError, 'Expected More Data'
+            raise DecryptNotBlockAlignedError('Expected More Data')
         return paddedBinaryString[:-ord(paddedBinaryString[-1])]
 
 class noPadding(Pad):
@@ -173,11 +181,11 @@ class Rijndael(BlockCipher):
         self.blockSize  = blockSize  # blockSize is in bytes
         self.padding    = padding    # change default to noPadding() to get normal ECB behavior
 
-        assert( keySize%4==0 and NrTable[4].has_key(keySize/4)),'key size must be 16,20,24,29 or 32 bytes'
-        assert( blockSize%4==0 and NrTable.has_key(blockSize/4)), 'block size must be 16,20,24,29 or 32 bytes'
+        assert( keySize%4==0 and keySize/4 in NrTable[4]),'key size must be 16,20,24,29 or 32 bytes'
+        assert( blockSize%4==0 and blockSize/4 in NrTable), 'block size must be 16,20,24,29 or 32 bytes'
 
-        self.Nb = self.blockSize/4          # Nb is number of columns of 32 bit words
-        self.Nk = keySize/4                 # Nk is the key length in 32-bit words
+        self.Nb = self.blockSize//4          # Nb is number of columns of 32 bit words
+        self.Nk = keySize//4                 # Nk is the key length in 32-bit words
         self.Nr = NrTable[self.Nb][self.Nk] # The number of rounds (Nr) is a function of
                                             # the block (Nb) and key (Nk) sizes.
         if key != None:
@@ -221,7 +229,10 @@ class Rijndael(BlockCipher):
     def _toBlock(self, bs):
         """ Convert binary string to array of bytes, state[col][row]"""
         assert ( len(bs) == 4*self.Nb ), 'Rijndarl blocks must be of size blockSize'
-        return [[ord(bs[4*i]),ord(bs[4*i+1]),ord(bs[4*i+2]),ord(bs[4*i+3])] for i in range(self.Nb)]
+        if type(bs) is str:
+            return [[ord(bs[4*i]),ord(bs[4*i+1]),ord(bs[4*i+2]),ord(bs[4*i+3])] for i in range(self.Nb)]
+        else:
+            return [[(bs[4*i]),(bs[4*i+1]),(bs[4*i+2]),(bs[4*i+3])] for i in range(self.Nb)]
 
     def _toBString(self, block):
         """ Convert block (array of bytes) to binary string """
@@ -244,14 +255,17 @@ NrTable =  {4: {4:10,  5:11,  6:12,  7:13,  8:14},
 def keyExpansion(algInstance, keyString):
     """ Expand a string of size keySize into a larger array """
     Nk, Nb, Nr = algInstance.Nk, algInstance.Nb, algInstance.Nr # for readability
-    key = [ord(byte) for byte in keyString]  # convert string to list
+    if type(keyString) is str:
+        key = [ord(byte) for byte in keyString]  # convert string to list
+    else:
+        key = [byte for byte in keyString]  # convert string to list
     w = [[key[4*i],key[4*i+1],key[4*i+2],key[4*i+3]] for i in range(Nk)]
     for i in range(Nk,Nb*(Nr+1)):
         temp = w[i-1]        # a four byte column
         if (i%Nk) == 0 :
             temp     = temp[1:]+[temp[0]]  # RotWord(temp)
             temp     = [ Sbox[byte] for byte in temp ]
-            temp[0] ^= Rcon[i/Nk]
+            temp[0] ^= Rcon[i//Nk]
         elif Nk > 6 and  i%Nk == 4 :
             temp     = [ Sbox[byte] for byte in temp ]  # SubWord(temp)
         w.append( [ w[i-Nk][byte]^temp[byte] for byte in range(4) ] )
@@ -451,7 +465,7 @@ class AES(Rijndael):
     def __init__(self, key = None, padding = padWithPadLen(), keySize=16):
         """ Initialize AES, keySize is in bytes """
         if  not (keySize == 16 or keySize == 24 or keySize == 32) :
-            raise BadKeySizeError, 'Illegal AES key size, must be 16, 24, or 32 bytes'
+            raise BadKeySizeError('Illegal AES key size, must be 16, 24, or 32 bytes')
 
         Rijndael.__init__( self, key, padding=padding, keySize=keySize, blockSize=16 )
 

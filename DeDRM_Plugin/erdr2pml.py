@@ -233,7 +233,8 @@ def sanitizeFileName(name):
     # delete control characters
     name = u"".join(char for char in name if ord(char)>=32)
     # white space to single space, delete leading and trailing while space
-    name = re.sub(ur"\s", u" ", name).strip()
+    #name = re.sub(ur"\s", u" ", name).strip()
+    name = re.sub(r"\s", u" ", name).strip()
     # remove leading dots
     while len(name)>0 and name[0] == u".":
         name = name[1:]
@@ -330,7 +331,7 @@ class EreaderProcessor(object):
         self.flags = struct.unpack('>L', r[4:8])[0]
         reqd_flags = (1<<9) | (1<<7) | (1<<10)
         if (self.flags & reqd_flags) != reqd_flags:
-            print "Flags: 0x%X" % self.flags
+            print("Flags: 0x%X" % self.flags)
             raise ValueError('incompatible eReader file')
         des = Des(fixKey(user_key))
         if version == 259:
@@ -480,26 +481,26 @@ def decryptBook(infile, outpath, make_pmlz, user_key):
     try:
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        print u"Decoding File"
+        print(u"Decoding File")
         sect = Sectionizer(infile, 'PNRdPPrs')
         er = EreaderProcessor(sect, user_key)
 
         if er.getNumImages() > 0:
-            print u"Extracting images"
+            print(u"Extracting images")
             if not os.path.exists(imagedirpath):
                 os.makedirs(imagedirpath)
             for i in xrange(er.getNumImages()):
                 name, contents = er.getImage(i)
                 file(os.path.join(imagedirpath, name), 'wb').write(contents)
 
-        print u"Extracting pml"
+        print(u"Extracting pml")
         pml_string = er.getText()
         pmlfilename = bookname + ".pml"
         file(os.path.join(outdir, pmlfilename),'wb').write(cleanPML(pml_string))
         if pmlzname is not None:
             import zipfile
             import shutil
-            print u"Creating PMLZ file {0}".format(os.path.basename(pmlzname))
+            print(u"Creating PMLZ file {0}".format(os.path.basename(pmlzname)))
             myZipFile = zipfile.ZipFile(pmlzname,'w',zipfile.ZIP_STORED, False)
             list = os.listdir(outdir)
             for filename in list:
@@ -518,33 +519,33 @@ def decryptBook(infile, outpath, make_pmlz, user_key):
             myZipFile.close()
             # remove temporary directory
             shutil.rmtree(outdir, True)
-            print u"Output is {0}".format(pmlzname)
+            print(u"Output is {0}".format(pmlzname))
         else :
-            print u"Output is in {0}".format(outdir)
-        print "done"
-    except ValueError, e:
-        print u"Error: {0}".format(e)
+            print(u"Output is in {0}".format(outdir))
+        print("done")
+    except ValueError as e:
+        print(u"Error: {0}".format(e))
         traceback.print_exc()
         return 1
     return 0
 
 
 def usage():
-    print u"Converts DRMed eReader books to PML Source"
-    print u"Usage:"
-    print u"  erdr2pml [options] infile.pdb [outpath] \"your name\" credit_card_number"
-    print u" "
-    print u"Options: "
-    print u"  -h             prints this message"
-    print u"  -p             create PMLZ instead of source folder"
-    print u"  --make-pmlz    create PMLZ instead of source folder"
-    print u" "
-    print u"Note:"
-    print u"  if outpath is ommitted, creates source in 'infile_Source' folder"
-    print u"  if outpath is ommitted and pmlz option, creates PMLZ 'infile.pmlz'"
-    print u"  if source folder created, images are in infile_img folder"
-    print u"  if pmlz file created, images are in images folder"
-    print u"  It's enough to enter the last 8 digits of the credit card number"
+    print(u"Converts DRMed eReader books to PML Source")
+    print(u"Usage:")
+    print(u"  erdr2pml [options] infile.pdb [outpath] \"your name\" credit_card_number")
+    print(u" ")
+    print(u"Options: ")
+    print(u"  -h             prints this message")
+    print(u"  -p             create PMLZ instead of source folder")
+    print(u"  --make-pmlz    create PMLZ instead of source folder")
+    print(u" ")
+    print(u"Note:")
+    print(u"  if outpath is ommitted, creates source in 'infile_Source' folder")
+    print(u"  if outpath is ommitted and pmlz option, creates PMLZ 'infile.pmlz'")
+    print(u"  if source folder created, images are in infile_img folder")
+    print(u"  if pmlz file created, images are in images folder")
+    print(u"  It's enough to enter the last 8 digits of the credit card number")
     return
 
 def getuser_key(name,cc):
@@ -553,13 +554,13 @@ def getuser_key(name,cc):
     return struct.pack('>LL', binascii.crc32(newname) & 0xffffffff,binascii.crc32(cc[-8:])& 0xffffffff)
 
 def cli_main():
-    print u"eRdr2Pml v{0}. Copyright © 2009–2012 The Dark Reverser et al.".format(__version__)
+    print(u"eRdr2Pml v{0}. Copyright © 2009–2012 The Dark Reverser et al.".format(__version__))
 
     argv=unicode_argv()
     try:
         opts, args = getopt.getopt(argv[1:], "hp", ["make-pmlz"])
-    except getopt.GetoptError, err:
-        print err.args[0]
+    except getopt.GetoptError as err:
+        print(err.args[0])
         usage()
         return 1
     make_pmlz = False
@@ -585,7 +586,7 @@ def cli_main():
     elif len(args)==4:
         infile, outpath, name, cc = args
 
-    print getuser_key(name,cc).encode('hex')
+    print(getuser_key(name,cc).encode('hex'))
 
     return decryptBook(infile, outpath, make_pmlz, getuser_key(name,cc))
 

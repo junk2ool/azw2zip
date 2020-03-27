@@ -10,10 +10,7 @@ import os
 import shutil
 import zipfile
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
+import io
 
 try:
     from calibre_plugins.dedrm import ion
@@ -45,8 +42,8 @@ class KFXZipBook:
                     if self.voucher is None:
                         self.decrypt_voucher(totalpids)
                     print(u'Decrypting KFX DRMION: {0}'.format(filename))
-                    outfile = StringIO()
-                    ion.DrmIon(StringIO(data[8:-8]), lambda name: self.voucher).parse(outfile)
+                    outfile = io.BytesIO()
+                    ion.DrmIon(io.BytesIO(data[8:-8]), lambda name: self.voucher).parse(outfile)
                     self.decrypted[filename] = outfile.getvalue()
 
         if not self.decrypted:
@@ -76,7 +73,7 @@ class KFXZipBook:
                 continue
 
             try:
-                voucher = ion.DrmIonVoucher(StringIO(data), pid[:dsn_len], pid[dsn_len:])
+                voucher = ion.DrmIonVoucher(io.BytesIO(data), pid[:dsn_len], pid[dsn_len:])
                 voucher.parse()
                 voucher.decryptvoucher()
                 break

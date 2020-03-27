@@ -164,7 +164,8 @@ def cleanup_name(name):
     # substitute filename unfriendly characters
     name = name.replace(u"<",u"[").replace(u">",u"]").replace(u" : ",u" – ").replace(u": ",u" – ").replace(u":",u"—").replace(u"/",u"_").replace(u"\\",u"_").replace(u"|",u"_").replace(u"\"",u"\'").replace(u"*",u"_").replace(u"?",u"")
     # white space to single space, delete leading and trailing while space
-    name = re.sub(ur"\s", u" ", name).strip()
+    #name = re.sub(ur"\s", u" ", name).strip()
+    name = re.sub(r"\s", u" ", name).strip()
     # delete control characters
     name = u"".join(char for char in name if ord(char)>=32)
     # delete non-ascii characters
@@ -208,14 +209,14 @@ def GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime 
 
     mobi = True
     magic8 = open(infile,'rb').read(8)
-    if magic8 == '\xeaDRMION\xee':
+    if magic8 == b'\xeaDRMION\xee':
         raise DrmException(u"The .kfx DRMION file cannot be decrypted by itself. A .kfx-zip archive containing a DRM voucher is required.")
 
     magic3 = magic8[:3]
-    if magic3 == 'TPZ':
+    if magic3 == b'TPZ':
         mobi = False
 
-    if magic8[:4] == 'PK\x03\x04':
+    if magic8[:4] == b'PK\x03\x04':
         mb = kfxdedrm.KFXZipBook(infile)
     elif mobi:
         mb = mobidedrm.MobiBook(infile)
