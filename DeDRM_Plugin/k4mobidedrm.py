@@ -69,7 +69,10 @@ import getopt
 import re
 import traceback
 import time
-import html.entities as htmlentitydefs
+try:
+    import html.entities as htmlentitydefs
+except ImportError:
+    import htmlentitydefs
 import json
 
 class DrmException(Exception):
