@@ -46,8 +46,10 @@ def unicode_argv():
         argvencoding = sys.stdin.encoding
         if argvencoding == None:
             argvencoding = "utf-8"
-        return [arg if (type(arg) == unicode) else unicode(arg,argvencoding) for arg in sys.argv]
-
+        if PY2:
+            return [arg if (type(arg) == unicode) else unicode(arg,argvencoding) for arg in sys.argv]
+        else:
+            return sys.argv
 
 def add_cp65001_codec():
   try:
