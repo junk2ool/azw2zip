@@ -102,7 +102,8 @@ def main(argv=unicode_argv()):
         output_zip = True
 
     # k4i ディレクトリはスクリプトのディレクトリ
-    k4i_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    azw2zip_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    k4i_dir = azw2zip_dir
     print(u"k4iディレクトリ: {}".format(k4i_dir))
     k4i_files = glob.glob(os.path.join(k4i_dir, '*.k4i'))
     if not len(k4i_files):
@@ -124,7 +125,7 @@ def main(argv=unicode_argv()):
         for k4i_fpath in k4i_files:
             print(u"k4i: {}".format(k4i_fpath))
     
-    # 処理ディレクトリ
+    # 変換ディレクトリ
     in_dir = args[0]
     if not os.path.isabs(in_dir):
         in_dir = os.path.abspath(in_dir)
@@ -168,12 +169,16 @@ def main(argv=unicode_argv()):
         # ランダムな8文字のディレクトリ名
         source = string.ascii_letters + string.digits
         random_str = ''.join([random.choice(source) for _ in range(8)])
-        temp_dir = os.path.join(out_dir, random_str)
+        temp_dir = os.path.join(out_dir, "Temp_" + random_str)
         book_fname = os.path.basename(os.path.dirname(azw_path))
         #temp_dir = os.path.join(out_dir, book_fname)
         print(u" 作業ディレクトリ: 作成: {}".format(temp_dir))
         if not kindleunpack.unipath.exists(temp_dir):
             kindleunpack.unipath.mkdir(temp_dir)
+
+        config_fpath = os.path.join(azw2zip_dir, 'azw2zip.json')
+        if os.path.exists(config_fpath):
+            shutil.copy(config_fpath, temp_dir)
 
         # HD画像(resファイル)があれば展開
         res_files = glob.glob(os.path.join(os.path.dirname(azw_path), '*.res'))
@@ -210,6 +215,11 @@ def main(argv=unicode_argv()):
 
         if DeDRM_path and kindleunpack.unipath.exists(DeDRM_path):
             # 書籍変換
+            output_format = [
+                [output_zip, "zip", ".zip"],
+                [output_epub, "epub", ".epub"],
+                [output_images, "Images", ""],
+            ]
             print(u"  書籍変換: 開始: {}".format(DeDRM_path))
 
             #unpack_dir = os.path.join(temp_dir, os.path.splitext(os.path.basename(DeDRM_path))[0])
@@ -227,24 +237,14 @@ def main(argv=unicode_argv()):
                 fname_txt = fname_file.readline().rstrip()
                 fname_file.close()
 
-                output_fpath = os.path.join(out_dir, fname_txt + ".zip")
-                if kindleunpack.unipath.exists(output_fpath):
-                    try:
-                        print(u"  {}変換: 完了: {}".format("zip", output_fpath))
-                    except UnicodeEncodeError:
-                        print(u"  {}変換: 完了: {}".format("zip", output_fpath.encode('cp932', 'replace').decode('cp932')))
-                output_fpath = os.path.join(out_dir, fname_txt + ".epub")
-                if kindleunpack.unipath.exists(output_fpath):
-                    try:
-                        print(u"  {}変換: 完了: {}".format("epub", output_fpath))
-                    except UnicodeEncodeError:
-                        print(u"  {}変換: 完了: {}".format("epub", output_fpath.encode('cp932', 'replace').decode('cp932')))
-                output_fpath = os.path.join(out_dir, fname_txt)
-                if kindleunpack.unipath.exists(output_fpath):
-                    try:
-                        print(u"  {}変換: 完了: {}".format("Images", output_fpath))
-                    except UnicodeEncodeError:
-                        print(u"  {}変換: 完了: {}".format("Images", output_fpath.encode('cp932', 'replace').decode('cp932')))
+                for format in output_format:
+                    if format[0]:
+                        output_fpath = os.path.join(out_dir, fname_txt + format[2])
+                        if kindleunpack.unipath.exists(output_fpath):
+                            try:
+                                print(u"  {}変換: 完了: {}".format(format[1], output_fpath))
+                            except UnicodeEncodeError:
+                                print(u"  {}変換: 完了: {}".format(format[1], output_fpath.encode('cp932', 'replace').decode('cp932')))
             else:
                 print(u"  書籍変換: 失敗:")
         else:

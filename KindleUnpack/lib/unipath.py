@@ -65,6 +65,9 @@ def isdir(s):
 def mkdir(s):
     return os.mkdir(pathof(s))
 
+def makedirs(s):
+    return os.makedirs(pathof(s))
+
 def listdir(s):
     rv = []
     for file in os.listdir(pathof(s)):

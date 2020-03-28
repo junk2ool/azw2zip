@@ -1,0 +1,27 @@
+{
+  "rename": [
+    {
+      "//": "サンプル",
+      "authors": "吾峠呼世晴",
+      "title": "(鬼滅の刃) (\\d{1,2})",
+      "series": "{title}",
+      "series_index": "鬼滅の刃 (\\d{1,2})",
+      "directory": "一般コミック\\[{authors}] {series}",
+      "template": "(一般コミック) [{authors}] {title} 第{series_index:0>2s}巻"
+    },
+    {
+      "//": "-tオプションのときの作品名の ～ (～コミックス) の括弧部分を消す",
+      "authors": ".*",
+      "title": "(.*)\\s\\(.*\\)",
+      "directory": "",
+      "template": "[{authors}] {title}"
+    },
+    {
+      "//": "デフォルト",
+      "authors": ".*",
+      "title": ".*",
+      "directory": "",
+      "template": "[{authors}] {title}"
+    }
+  ]
+}

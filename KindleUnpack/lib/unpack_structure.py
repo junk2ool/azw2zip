@@ -13,6 +13,7 @@ DUMP = False
 """ Set to True to dump all possible information. """
 
 import os
+import sys
 
 import re
 # note: re requites the pattern to be the exact same type as the data to be searched in python3
@@ -109,10 +110,9 @@ class fileNames:
                 self.zipUpDir(myzip, tdir, localfilePath)
 
     def makeEPUB(self, usedmap, obfuscate_data, uid, output_epub, fname, cover_offset):
-        if output_epub:
-            bname = os.path.join(self.outdir, '..', fname + '.epub')
-        else:
-            bname = os.path.join(self.k8dir, self.getInputFileBasename() + '.epub')
+        bname = os.path.normpath(os.path.join(self.outdir, '..', fname + '.epub'))
+        if output_epub and not unipath.exists(os.path.dirname(bname)):
+            unipath.makedirs(os.path.dirname(bname))
 
         # Create an encryption key for Adobe font obfuscation
         # based on the epub's uid
@@ -193,7 +193,9 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         self.outzip.close()
 
     def makeZip(self, fname, cover_offset, zip_compress = False):
-        bname = os.path.join(self.outdir, '..', fname + '.zip')
+        bname = os.path.normpath(os.path.join(self.outdir, '..', fname + '.zip'))
+        if not unipath.exists(os.path.dirname(bname)):
+            unipath.makedirs(os.path.dirname(bname))
 
         # ready to build zip
         self.outzip = zipfile.ZipFile(pathof(bname), 'w')
@@ -214,12 +216,11 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         self.outzip.close()
 
     def makeImages(self, fname, cover_offset):
-        bname = os.path.join(self.outdir, '..', fname)
-        if not unipath.exists(bname):
-            unipath.mkdir(bname)
+        bname = os.path.normpath(os.path.join(self.outdir, '..', fname))
         #bname = os.path.join(bname, "Images")
-        #if not unipath.exists(bname):
-        #    unipath.mkdir(bname)
+
+        if not unipath.exists(bname):
+            unipath.makedirs(bname)
 
         # ready to build images
         if unipath.exists(self.k8images):

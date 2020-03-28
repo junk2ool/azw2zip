@@ -7,14 +7,18 @@
 KindleUnpackとDeDRM、DumpAZW6を改造してKindleの電子書籍(azw/azw3(あればresも))を画像のみの無圧縮zipかepubに変換するようにしたもの。
 azwはWindowsならキーファイル(k4i)がなければ作り、変換します。(多分Macもだけど環境がないので未確認)
 Linux(WSLも)では各自キーファイル(k4i)を別途用意してこれと同じディレクトリにおいてください。
-Python 2.7(+pycrypto)が動く環境が必要です。
+Python 2.7かPython 3.8にpycryptoを入れたものが動く環境が必要です。
 Kindleは1.24以前のものをインストールした環境でないとダメです。(DeDRMの仕様)
 
 ■開発環境
-Windows 10とWSL(Ubuntu 18.4 LTS)のPython2.7、Kindle 1.24で開発＆動作確認を行っています。
+・Kindle 1.24
+・Python 2.7.17 & Python 3.8.2
+  ・Windows10
+  ・WSL + Ubuntu 18.4 LTS
+で開発＆動作確認を行っています。
 
 ■使用方法
-各々の環境にPython 2.7(+pycrypto)を入れてazw2zip.pyに引数を渡して実行してください。
+各々の環境にPython 2.7かPython 3.8にpycryptoを入れてazw2zip.pyに引数を渡して実行してください。
 引数は、
 azw2zip [-z] [-e] [-f] [-t] [-c] [-d] <azw_indir> [outdir]
 
@@ -35,6 +39,33 @@ azw2zip [-z] [-e] [-f] [-t] [-c] [-d] <azw_indir> [outdir]
 ・Windowsで毎回コマンドラインはめんどくさい人
 Pythonの環境を整えてからazw2zip.vbsにpython.exeのパスを設定して、
 変換したい書籍のディレクトリをazw2zip.vbsにD&Dするとこれと同じディレクトリにzipが作成されます。
+
+■ファイル名
+出力されるファル名は、
+[作者名] 作品名(.zip/.epub)
+になります。
+作者名は複数作者の場合 & で繋げるようになっています。
+作品名はTitleを使用します。
+-t オプションでUpdated_Titleを使うようになります。(calibreと同じ形式)
+作者名、作品名をファイル名にする際のダメ文字は全角化するようにしています。(/を／等)
+
+出力ファイル名及びディレクトリによる振り分けはazw2zip.jsonに正規表現で設定することで変更可能です。
+azw2zip.sample.jsonをリネームするなりして使用してください。
+キーと値は、
+authors       作者にマッチする正規表現。
+title         作品名にマッチする正規表現。
+              グループ設定が可能で、(title)(series_index)(sub_title)の順で変数に値を代入できます。
+series        シリーズ名。任意。変数が使えます。
+series_index  巻数。任意。変数が使えます。
+              titleキーの正規表現のグループで取るようにしていれば不要。全角数字は半角にします。
+directory     出力先。任意。変数が使えます。
+sub_title     titleキーの正規表現のグループで取るようにした場合のみ値が入ります。
+template      リネーム書式。clibreのディスクに保存のテンプレートと同じで変数が使えます。
+              ただし対応している変数は今の所上記の6つだけです。
+先頭から評価するので、ゆるい条件は最後の方に書いてください。
+
+KindleUnpack/lib/kindleunpack.py
+の646行からの部分で実装してます。
 
 ■変更点
 全般的にPython3への対応。
@@ -62,19 +93,6 @@ KindleUnpack - KindleUnpack/lib
 ・DumpAZW6で出力したHD画像を取り込むように追加。(unpack_structure.py)
 ・S-JISに存在しないUnicode文字の表示がWindows環境でエラーが出ないように対策。(mobi_header.py)
 
-■その他
-出力されるファル名は、
-[作者名] 作品名(.zip/.epub)
-になります。
-作者名は複数作者の場合 & で繋げるようになっています。
-作品名はTitleを使用します。
--t オプションでUpdated_Titleを使うようになります。(calibreと同じ形式)
-作者名、作品名をファイル名にする際のダメ文字は全角化するようにしています。(/を／等)
-
-出力ファイル名を変えたければ、
-KindleUnpack/lib/kindleunpack.py
-の641行からの部分を変更してください。
-
 ■使用したもの等
 DeDRM_tools 6.7.0
 https://github.com/apprenticeharper/DeDRM_tools
@@ -93,6 +111,11 @@ https://fgshun.hatenablog.com/entry/20100213/1266032982
 http://rio2016.5ch.net/test/read.cgi/ebooks/1526467330/395
 の>>395さんの修正も取り込んでいます。
 
+■ToDo
+・azw2zip.jsonの読み込みが適当なので整理する。
+・DeDRMのPython3対応は適当なので漏れがありそう。
+・py2exeでexeにしたい。
+
 ■ライセンス
 GNU General Public License v3.0
 
@@ -103,7 +126,10 @@ GNU General Public License v3.0
 ・-fでImagesディレクトリを出力できるように追加。
 ・-eのepub出力をzip出力と排他的にならないように変更。
 ・-cでzip出力時に圧縮出来るように追加。
+・azw2zip.jsonの設定による出力ファイルのリネーム＆振り分け機能を追加。
+・作業ディレクトリ名を少し変更。
 ・html.entitiesがimport出来ずエラーになるのを修正。
+・nav.xhtmlに存在しない表紙が登録され表紙が二重になってしまうことがあったのを修正。
 
 2020/03/25 v.0.2
 ・S-JISに存在しないUnicode文字が作者名/作品名に含まれていた場合、出力ファイル名が数値文字参照になっていたのを修正。

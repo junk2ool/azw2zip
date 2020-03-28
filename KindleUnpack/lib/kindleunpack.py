@@ -12,6 +12,11 @@ import sys
 import codecs
 import traceback
 
+import json
+from collections import OrderedDict
+import pprint
+import re
+
 from compatibility_utils import PY2, binary_type, utf8_str, unicode_str, unescapeit
 from compatibility_utils import unicode_argv, add_cp65001_codec
 from compatibility_utils import hexlify
@@ -611,7 +616,7 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
 
     # make an epub-like structure of it all
     print("Creating an epub-like file")
-    files.makeEPUB(usedmap, obfuscate_data, uuid, OUTPUT_EPUB, makeOutputFileName(mh), cover_offset)
+    files.makeEPUB(usedmap, obfuscate_data, uuid, OUTPUT_EPUB, makeOutputFileName(mh, files), cover_offset)
 
 
 def processZip(mh, files):
@@ -625,7 +630,7 @@ def processZip(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeZip(makeOutputFileName(mh), cover_offset, COMPRESS_ZIP)
+    files.makeZip(makeOutputFileName(mh, files), cover_offset, COMPRESS_ZIP)
 
 def processImages(mh, files):
     # make a images
@@ -636,12 +641,11 @@ def processImages(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeImages(makeOutputFileName(mh), cover_offset)
+    files.makeImages(makeOutputFileName(mh, files), cover_offset)
 
-def makeOutputFileName(mh):
+def makeOutputFileName(mh, files):
     global UPDATED_TITLE
 
-    # ファイル名作成 [Creator] Title.zip
     # Title
     if UPDATED_TITLE and 'Updated_Title' in mh.metadata:
         title = mh.metadata['Updated_Title'][0]
@@ -649,17 +653,70 @@ def makeOutputFileName(mh):
         title = mh.title
     title = xmlescape(unescapeit(unicode_str(title)))
     # Creator
-    creator = ''
+    authors = ''
     for index in range(len(mh.metadata.get('Creator'))):
         if index != 0:
-            creator += ' & '
-        creator += xmlescape(unescapeit(unicode_str(mh.metadata.get('Creator')[index])))
+            authors += ' & '
+        authors += xmlescape(unescapeit(unicode_str(mh.metadata.get('Creator')[index])))
     #
-    fname = u'[{creator}] {title}'.format(creator=creator, title=title)
-
+    title = safefilename.safefilename(title, table=safefilename.table2)
+    authors = safefilename.safefilename(authors, table=safefilename.table2)
     #ダメ文字を _ (アンダーバー)に変換する場合はこっち
-    #return safefilename.safefilename(fname)
-    return safefilename.safefilename(fname, table=safefilename.table2)
+    #title = safefilename.safefilename(title)
+    #authors = safefilename.safefilename(authors)
+
+    # 全角→半角用辞書
+    ZEN = dict((0xff00 + ch, 0x0020 + ch) for ch in range(0x5f))
+    ZEN[0x3000] = 0x0020
+
+    # ファイル名作成 デフォルトは [authors] title
+    outdir = ''
+    series = ''
+    series_index = '0'
+    rename_template = u'[{authors}] {title}'
+    org_title = title
+    sub_title = ''
+    # azw2zip.json からテンプレートを読み込んでリネーム
+    config_fpath = os.path.join(files.getOutputDir(), 'azw2zip.json')
+    if unipath.exists(config_fpath):
+        with open(config_fpath, 'rb') as f:
+            config = json.load(f, object_pairs_hook=OrderedDict)
+        if 'rename' in config:
+            for rename_info in config['rename']:
+                match_authors = None
+                match_title = None
+                if 'authors' in rename_info:
+                    match_authors = re.match(rename_info['authors'], authors)
+                if 'title' in rename_info:
+                    match_title = re.match(rename_info['title'], org_title)
+                if match_authors and match_title:
+                    if len(match_title.groups()):
+                        title = match_title.group(1)
+                        if len(match_title.groups()) > 1:
+                            series_index = match_title.group(2)
+                            series_index = series_index.translate(ZEN)
+                        if len(match_title.groups()) > 2:
+                            sub_title = match_title.group(3)
+                    if 'series' in rename_info:
+                        series = rename_info['series'].format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
+                    if 'series_index' in rename_info:
+                        match_series_index = re.match(rename_info['series_index'], org_title)
+                        if match_series_index and len(match_series_index.groups()):
+                            series_index = match_series_index.group(1)
+                            series_index = series_index.translate(ZEN)
+                    if 'directory' in rename_info:
+                        outdir = rename_info['directory'].format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
+                        if sys.platform.startswith('win'):
+                            outdir = outdir.replace('/', os.sep)
+                        else:
+                            outdir = outdir.replace('\\', os.sep)
+                    if 'template' in rename_info:
+                        rename_template = rename_info['template']
+                    break
+
+    fname = rename_template.format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
+
+    return os.path.join(outdir, fname)
 
 def processMobi7(mh, metadata, sect, files, rscnames):
     global DUMP
@@ -916,7 +973,7 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
 
         fname_txt = os.path.join(files.getOutputDir(), 'fname.txt')
         f = open(fname_txt, 'wb')
-        f.write(makeOutputFileName(mh).encode('utf-8'))
+        f.write(makeOutputFileName(mh, files).encode('utf-8'))
         f.close()
 
     return
