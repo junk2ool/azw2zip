@@ -1,5 +1,39 @@
 {
+  "default": [
+    {
+      "//": "デフォルト値",
+      "updated_title": 0,
+      "compress_zip": 0,
+      "output_zip": 0,
+      "output_epub": 0,
+      "output_images": 0,
+      "output_dir": "",
+      "debug_mode": 0,
+      "k4i_dir": "",
+      "authors_sep": " & "
+    }
+  ],
+
   "rename": [
+    {
+      "//": "全角英数字記号を半角に",
+      "authors": ".+",
+      "title": ".+",
+      "ZENtoHAN": 1,
+      "pass": 1
+    },
+    {
+      "//": "作者名の姓名の空白を削除",
+      "author": [ "(.+)\\s+(.+)", "\\1\\2" ],
+      "title": ".+",
+      "pass": 1
+    },
+    {
+      "//": "-tオプションのときの作品名末尾の ～ (～コミックス) の括弧部分を消す",
+      "authors": ".+",
+      "title": "(.+)\\s+\\(.+\\)$",
+      "pass": 1
+    },
     {
       "//": "サンプル",
       "authors": "吾峠呼世晴",
@@ -10,16 +44,17 @@
       "template": "(一般コミック) [{authors}] {title} 第{series_index:0>2s}巻"
     },
     {
-      "//": "-tオプションのときの作品名の ～ (～コミックス) の括弧部分を消す",
-      "authors": ".*",
-      "title": "(.*)\\s\\(.*\\)",
-      "directory": "",
-      "template": "[{authors}] {title}"
+      "//": "雑誌",
+      "authors": ".+",
+      "title": "(.+)\\s+\\[雑誌\\]",
+      "series": [ "(.+?)\\s+\\d{4}.+", "\\1", "{title}" ],
+      "directory": "{series}",
+      "template": "(雑誌) [{publisher}] {title}"
     },
     {
-      "//": "デフォルト",
-      "authors": ".*",
-      "title": ".*",
+      "//": "デフォルト(必須)",
+      "authors": ".+",
+      "title": ".+",
       "directory": "",
       "template": "[{authors}] {title}"
     }

@@ -694,7 +694,7 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv[1:], "rh:",["fixed-image"])
 
-    except getopt.GetoptError, err:
+    except getopt.GetoptError as err:
         print(str(err))
         usage()
         return 1

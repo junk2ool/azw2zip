@@ -32,6 +32,8 @@ import DumpAZW6_v01
 import kindleunpack
 import kindleunpack.unipath
 
+from azw2zip_config import azw2zipConfig
+
 with redirect_stdout(open(os.devnull, 'w')):
     # AlfCrypto読み込み時の標準出力抑制
     import kindlekey
@@ -65,6 +67,7 @@ def main(argv=unicode_argv()):
     print(u"")
 
     progname = os.path.basename(argv[0])
+    azw2zip_dir = os.path.dirname(os.path.abspath(argv[0]))
 
     try:
         opts, args = getopt.getopt(argv[1:], "tczefd")
@@ -77,14 +80,17 @@ def main(argv=unicode_argv()):
         usage(progname)
         sys.exit(2)
 
+    cfg = azw2zipConfig()
+    cfg.load(os.path.join(azw2zip_dir, 'azw2zip.json'))
+
+    updated_title = cfg.isUpdatedTitle()
+    compress_zip = cfg.isCompressZip()
+    output_zip = cfg.isOutputZip()
+    output_epub = cfg.isOutputEpub()
+    output_images = cfg.isOutputImages()
+    debug_mode = cfg.isDebugMode()
 
     # オプション解析
-    debug_mode = False
-    updated_title = False
-    output_zip = False
-    output_epub = False
-    output_images = False
-    compress_zip = False
     for o, a in opts:
         if o == "-t":
             updated_title = True
@@ -100,11 +106,14 @@ def main(argv=unicode_argv()):
             debug_mode = True
     if not output_zip and not output_epub and not output_images:
         output_zip = True
+    cfg.setOptions(updated_title, compress_zip, output_zip, output_epub, output_images, debug_mode)
 
     # k4i ディレクトリはスクリプトのディレクトリ
-    azw2zip_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    k4i_dir = azw2zip_dir
+    k4i_dir = cfg.getk4iDirectory()
+    if not k4i_dir:
+        k4i_dir = azw2zip_dir
     print(u"k4iディレクトリ: {}".format(k4i_dir))
+    cfg.setk4iDirectory(k4i_dir)
     k4i_files = glob.glob(os.path.join(k4i_dir, '*.k4i'))
     if not len(k4i_files):
         # k4iがなければ作成
@@ -137,14 +146,15 @@ def main(argv=unicode_argv()):
     print(u"変換ディレクトリ: {}".format(in_dir))
 
     # 出力ディレクトリ作成
-    out_dir = ""
+    out_dir = cfg.getOutputDirectory()
     if len(args) > 1:
         out_dir = args[1]
         if not os.path.isabs(out_dir):
            out_dir = os.path.abspath(out_dir)
     if not out_dir:
-        out_dir = os.getcwd()
+        out_dir = azw2zip_dir #os.getcwd()
     out_dir = os.path.realpath(os.path.normpath(out_dir))
+    cfg.setOutputDirectory(out_dir)
 
     print(u"出力ディレクトリ: {}".format(out_dir))
     if not kindleunpack.unipath.exists(out_dir):
@@ -175,10 +185,6 @@ def main(argv=unicode_argv()):
         print(u" 作業ディレクトリ: 作成: {}".format(temp_dir))
         if not kindleunpack.unipath.exists(temp_dir):
             kindleunpack.unipath.mkdir(temp_dir)
-
-        config_fpath = os.path.join(azw2zip_dir, 'azw2zip.json')
-        if os.path.exists(config_fpath):
-            shutil.copy(config_fpath, temp_dir)
 
         # HD画像(resファイル)があれば展開
         res_files = glob.glob(os.path.join(os.path.dirname(azw_path), '*.res'))
@@ -225,10 +231,10 @@ def main(argv=unicode_argv()):
             #unpack_dir = os.path.join(temp_dir, os.path.splitext(os.path.basename(DeDRM_path))[0])
             unpack_dir = temp_dir
             if debug_mode:
-                kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, compress_zip, output_zip, output_epub, output_images)
+                kindleunpack.kindleunpack(DeDRM_path, unpack_dir, cfg)
             else:
                 with redirect_stdout(open(os.devnull, 'w')):
-                    kindleunpack.kindleunpack(DeDRM_path, unpack_dir, updated_title, compress_zip, output_zip, output_epub, output_images)
+                    kindleunpack.kindleunpack(DeDRM_path, unpack_dir, cfg)
 
             # 作成したファイル名を取得
             fname_path = os.path.join(temp_dir, "fname.txt")

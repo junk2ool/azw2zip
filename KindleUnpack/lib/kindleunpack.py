@@ -163,12 +163,6 @@ SPLIT_COMBO_MOBIS = False
 CREATE_COVER_PAGE = True  # XXX experimental
 """ Create and insert a cover xhtml page. """
 
-UPDATED_TITLE = False
-COMPRESS_ZIP = False
-OUTPUT_ZIP = True
-OUTPUT_EPUB = False
-OUTPUT_IMAGES = False
-
 EOF_RECORD = b'\xe9\x8e' + b'\r\n'
 """ The EOF record content. """
 
@@ -211,6 +205,8 @@ from mobi_cover import CoverProcessor, get_image_type
 from mobi_pagemap import PageMapProcessor
 from mobi_dict import dictSupport
 
+from azw2zip_config import azw2zipConfig
+azw2zip_cfg = azw2zipConfig()
 
 def processSRCS(i, files, rscnames, sect, data):
     # extract the source zip archive and save it.
@@ -616,12 +612,10 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
 
     # make an epub-like structure of it all
     print("Creating an epub-like file")
-    files.makeEPUB(usedmap, obfuscate_data, uuid, OUTPUT_EPUB, makeOutputFileName(mh, files), cover_offset)
+    files.makeEPUB(usedmap, obfuscate_data, uuid, azw2zip_cfg.isOutputEpub(), azw2zip_cfg.makeOutputFileName(mh), cover_offset)
 
 
 def processZip(mh, files):
-    global COMPRESS_ZIP
-
     # make a zip
     print("Creating a Zip file")
     
@@ -630,7 +624,7 @@ def processZip(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeZip(makeOutputFileName(mh, files), cover_offset, COMPRESS_ZIP)
+    files.makeZip(azw2zip_cfg.makeOutputFileName(mh), cover_offset, azw2zip_cfg.isCompressZip())
 
 def processImages(mh, files):
     # make a images
@@ -641,82 +635,7 @@ def processImages(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeImages(makeOutputFileName(mh, files), cover_offset)
-
-def makeOutputFileName(mh, files):
-    global UPDATED_TITLE
-
-    # Title
-    if UPDATED_TITLE and 'Updated_Title' in mh.metadata:
-        title = mh.metadata['Updated_Title'][0]
-    else:
-        title = mh.title
-    title = xmlescape(unescapeit(unicode_str(title)))
-    # Creator
-    authors = ''
-    for index in range(len(mh.metadata.get('Creator'))):
-        if index != 0:
-            authors += ' & '
-        authors += xmlescape(unescapeit(unicode_str(mh.metadata.get('Creator')[index])))
-    #
-    title = safefilename.safefilename(title, table=safefilename.table2)
-    authors = safefilename.safefilename(authors, table=safefilename.table2)
-    #ダメ文字を _ (アンダーバー)に変換する場合はこっち
-    #title = safefilename.safefilename(title)
-    #authors = safefilename.safefilename(authors)
-
-    # 全角→半角用辞書
-    ZEN = dict((0xff00 + ch, 0x0020 + ch) for ch in range(0x5f))
-    ZEN[0x3000] = 0x0020
-
-    # ファイル名作成 デフォルトは [authors] title
-    outdir = ''
-    series = ''
-    series_index = '0'
-    rename_template = u'[{authors}] {title}'
-    org_title = title
-    sub_title = ''
-    # azw2zip.json からテンプレートを読み込んでリネーム
-    config_fpath = os.path.join(files.getOutputDir(), 'azw2zip.json')
-    if unipath.exists(config_fpath):
-        with open(config_fpath, 'rb') as f:
-            config = json.load(f, object_pairs_hook=OrderedDict)
-        if 'rename' in config:
-            for rename_info in config['rename']:
-                match_authors = None
-                match_title = None
-                if 'authors' in rename_info:
-                    match_authors = re.match(rename_info['authors'], authors)
-                if 'title' in rename_info:
-                    match_title = re.match(rename_info['title'], org_title)
-                if match_authors and match_title:
-                    if len(match_title.groups()):
-                        title = match_title.group(1)
-                        if len(match_title.groups()) > 1:
-                            series_index = match_title.group(2)
-                            series_index = series_index.translate(ZEN)
-                        if len(match_title.groups()) > 2:
-                            sub_title = match_title.group(3)
-                    if 'series' in rename_info:
-                        series = rename_info['series'].format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
-                    if 'series_index' in rename_info:
-                        match_series_index = re.match(rename_info['series_index'], org_title)
-                        if match_series_index and len(match_series_index.groups()):
-                            series_index = match_series_index.group(1)
-                            series_index = series_index.translate(ZEN)
-                    if 'directory' in rename_info:
-                        outdir = rename_info['directory'].format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
-                        if sys.platform.startswith('win'):
-                            outdir = outdir.replace('/', os.sep)
-                        else:
-                            outdir = outdir.replace('\\', os.sep)
-                    if 'template' in rename_info:
-                        rename_template = rename_info['template']
-                    break
-
-    fname = rename_template.format(authors=authors, title=title, series=series, series_index=series_index, sub_title=sub_title)
-
-    return os.path.join(outdir, fname)
+    files.makeImages(azw2zip_cfg.makeOutputFileName(mh), cover_offset)
 
 def processMobi7(mh, metadata, sect, files, rscnames):
     global DUMP
@@ -965,15 +884,15 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
         processUnknownSections(mh, sect, files, K8Boundary)
 
         # Zip
-        if OUTPUT_ZIP:
+        if azw2zip_cfg.isOutputZip():
             processZip(mh, files)
 
-        if OUTPUT_IMAGES:
+        if azw2zip_cfg.isOutputImages():
             processImages(mh, files)
 
         fname_txt = os.path.join(files.getOutputDir(), 'fname.txt')
         f = open(fname_txt, 'wb')
-        f.write(makeOutputFileName(mh, files).encode('utf-8'))
+        f.write(azw2zip_cfg.makeOutputFileName(mh).encode('utf-8'))
         f.close()
 
     return
@@ -1078,18 +997,11 @@ def usage(progname):
     print("    -r                 write raw data to the output folder")
 
 
-def kindleunpack(infile, outdir, update_title = False, compress_zip = False, output_zip = True, output_epub = False, output_images = False):
-    global UPDATED_TITLE
-    global COMPRESS_ZIP
-    global OUTPUT_ZIP
-    global OUTPUT_EPUB
-    global OUTPUT_IMAGES
+def kindleunpack(infile, outdir, cfg):
+    global azw2zip_cfg
 
-    UPDATED_TITLE = update_title
-    COMPRESS_ZIP = compress_zip
-    OUTPUT_ZIP = output_zip
-    OUTPUT_EPUB = output_epub
-    OUTPUT_IMAGES = output_images
+    azw2zip_cfg = cfg
+
     try:
         print('Unpacking Book...')
         unpackBook(infile, outdir, None, 'A', True)
