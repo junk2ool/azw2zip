@@ -227,7 +227,9 @@ def GetDecryptedBook(infile, kDatabases, androidFiles, serials, pids, starttime 
     try:
         print(u"Decrypting {1} ebook: {0}".format(bookname, mb.getBookType()))
     except UnicodeEncodeError:
-        print(u"Decrypting {1} ebook: {0}".format(bookname.encode('cp932', 'replace').decode('cp932'), mb.getBookType()))
+        bname = bookname.encode('cp932', 'replace').decode('cp932')
+        btype = mb.getBookType()
+        print(u"Decrypting {1} ebook: {0}".format(bname, btype))
 
     # copy list of pids
     totalpids = list(pids)

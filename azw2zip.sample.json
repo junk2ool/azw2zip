@@ -4,13 +4,19 @@
       "//": "デフォルト値",
       "updated_title": 0,
       "compress_zip": 0,
+      "over_write": 0,
       "output_zip": 0,
       "output_epub": 0,
       "output_images": 0,
       "output_dir": "",
       "debug_mode": 0,
       "k4i_dir": "",
-      "authors_sep": " & "
+      "authors_sep": " & ",
+      "///": "下記はnodedrm版用の設定",
+      "output_thumb": 0,
+      "cover_fname": "cover{num1:0>5}.{ext}",
+      "image_fname": "image{num1:0>5}.{ext}",
+      "thumb_fname": "thumb{num1:0>5}.{ext}"
     }
   ],
 

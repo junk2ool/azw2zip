@@ -2,9 +2,6 @@
 # coding: utf-8
 
 import os
-
-__path__ = ["lib", os.path.dirname(os.path.realpath(__file__)), "kindleunpack"]
-
 import sys
 import codecs
 import traceback
@@ -14,12 +11,18 @@ from collections import OrderedDict
 import pprint
 import re
 
-import unipath
+PY2 = sys.version_info[0] == 2
 
-from mobi_header import MobiHeader
-from compatibility_utils import PY2, binary_type, utf8_str, unicode_str, unescapeit
+if PY2:
+    from HTMLParser import HTMLParser
+    _h = HTMLParser()
+elif sys.version_info[1] < 4:
+    import html.parser
+    _h = html.parser.HTMLParser()
+else:
+    import html as _h
 
-import safefilename
+import safefilename as sfn
 
 class azw2zipConfig:
 
@@ -29,17 +32,25 @@ class azw2zipConfig:
 
         self.updated_title = False
         self.compress_zip = False
+        self.over_write = False
+        self.output_thumb = False
         self.output_zip = False
         self.output_epub = False
         self.output_images = False
         self.outdir = ''
         self.k4idir = ''
         self.authors_sep = u' & '
+        self.cover_fname = u"cover{num1:0>5}.{ext}"
+        self.image_fname = u"image{num1:0>5}.{ext}"
+        self.thumb_fname = u"thumb{num1:0>5}.{ext}"
+        #self.cover_fname = u'cover.{ext}'
+        #self.image_fname = u'image{image_num1:0>3}.{ext}'
+        #self.thumb_fname = u'thumbnail.{ext}'
         self.debug_mode = False
 
     def load(self, filename):
         self.filename = filename
-        if not unipath.exists(self.filename):
+        if not os.path.exists(self.filename):
             return 1
 
         with open(self.filename, 'rb') as f:
@@ -51,6 +62,10 @@ class azw2zipConfig:
                         self.updated_title = True
                     if 'compress_zip' in key_info and key_info['compress_zip']:
                         self.compress_zip = True
+                    if 'over_write' in key_info and key_info['over_write']:
+                        self.over_write = True
+                    if 'output_thumb' in key_info and key_info['output_thumb']:
+                        self.output_thumb = True
                     if 'output_zip' in key_info and key_info['output_zip']:
                         self.output_zip = True
                     if 'output_epub' in key_info and key_info['output_epub']:
@@ -63,6 +78,12 @@ class azw2zipConfig:
                         self.k4idir = key_info['k4i_dir']
                     if 'authors_sep' in key_info:
                         self.authors_sep = key_info['authors_sep']
+                    if 'cover_fname' in key_info:
+                        self.cover_fname = key_info['cover_fname']
+                    if 'image_fname' in key_info:
+                        self.image_fname = key_info['image_fname']
+                    if 'thumb_fname' in key_info:
+                        self.thumb_fname = key_info['thumb_fname']
                     if 'debug_mode' in key_info and key_info['debug_mode']:
                         self.debug_mode = True
         return 0
@@ -82,6 +103,12 @@ class azw2zipConfig:
     def isCompressZip(self):
         return self.compress_zip
 
+    def isOverWrite(self):
+        return self.over_write
+
+    def isOutputThumb(self):
+        return self.output_thumb
+
     def isOutputZip(self):
         return self.output_zip
 
@@ -94,16 +121,29 @@ class azw2zipConfig:
     def isDebugMode(self):
         return self.debug_mode
 
-    def setOptions(self, updated_title, compress_zip, output_zip, output_epub, output_images, debug_mode):
+    def setOptions(self, updated_title, compress_zip, over_write, output_thumb, debug_mode):
         self.updated_title = updated_title
         self.compress_zip = compress_zip
+        self.over_write = over_write
+        self.output_thumb = output_thumb
+        self.debug_mode = debug_mode
+
+    def setOutputFormats(self, output_zip, output_epub, output_images):
         self.output_zip = output_zip
         self.output_epub = output_epub
         self.output_images = output_images
-        self.debug_mode = debug_mode
 
     def getOutputDirectory(self):
         return self.outdir
+
+    def getCoverFilename(self):
+        return self.cover_fname
+
+    def getImageFilename(self):
+        return self.image_fname
+
+    def getThumbFilename(self):
+        return self.thumb_fname
 
     def setOutputDirectory(self, outdir):
         self.outdir = outdir
@@ -117,30 +157,29 @@ class azw2zipConfig:
             if index > 4:
                 authors += u'外{}名'.format(len(author)-5)
                 break
-            #authors += unescapeit(unicode_str(author[index]))
-            #authors += safefilename.safefilename(unescapeit(unicode_str(author[index])), table=safefilename.table2)
+            #authors += _h.unescape(unicode_str(author[index]))
+            #authors += sfn.safefilename(_h.unescape(unicode_str(author[index])), table=sfn.table2)
             authors += author[index]
         return authors
 
-    def makeOutputFileName(self, mh):
+    def makeOutputFileName(self, metadata):
         # Title
-        if self.updated_title and 'Updated_Title' in mh.metadata:
-            title = mh.metadata.get('Updated_Title')[0]
+        if self.updated_title and 'Updated_Title' in metadata:
+            title = metadata.get('Updated_Title')[0]
         else:
-            title = mh.title
-        print(title)
-        title = unescapeit(unicode_str(title))
+            title = metadata.get('Title')[0]
+        title = _h.unescape(title)
         # Creator
         author = []
-        for index in range(len(mh.metadata.get('Creator'))):
-            author.append(safefilename.safefilename(unescapeit(unicode_str(mh.metadata.get('Creator')[index])), table=safefilename.table2))
+        for index in range(len(metadata.get('Creator'))):
+            author.append(sfn.safefilename(_h.unescape(metadata.get('Creator')[index]), table=sfn.table2))
         #
         publisher = ''
-        if 'Publisher' in mh.metadata:
-            publisher = mh.metadata.get('Publisher')[0]
-            publisher = safefilename.safefilename(publisher, table=safefilename.table2)
+        if 'Publisher' in metadata:
+            publisher = metadata.get('Publisher')[0]
+            publisher = sfn.safefilename(publisher, table=sfn.table2)
         #
-        title = safefilename.safefilename(title, table=safefilename.table2)
+        title = sfn.safefilename(title, table=sfn.table2)
         authors = self.makeAuthors(author)
 
         # 全角→半角用辞書
@@ -230,17 +269,17 @@ class azw2zipConfig:
                     # ZENtoHAN
                     if 'ZENtoHAN' in rename_info and rename_info['ZENtoHAN']:
                         for index in range(len(author)):
-                            author[index] = safefilename.safefilename(author[index].translate(ZEN2HAN_dict), table=safefilename.table2)
+                            author[index] = sfn.safefilename(author[index].translate(ZEN2HAN_dict), table=sfn.table2)
                         if authors:
-                            authors = safefilename.safefilename(authors.translate(ZEN2HAN_dict), table=safefilename.table2)
+                            authors = sfn.safefilename(authors.translate(ZEN2HAN_dict), table=sfn.table2)
                         if title:
-                            title = safefilename.safefilename(title.translate(ZEN2HAN_dict), table=safefilename.table2)
+                            title = sfn.safefilename(title.translate(ZEN2HAN_dict), table=sfn.table2)
                         if sub_title:
-                            sub_title = safefilename.safefilename(sub_title.translate(ZEN2HAN_dict), table=safefilename.table2)
+                            sub_title = sfn.safefilename(sub_title.translate(ZEN2HAN_dict), table=sfn.table2)
                         if series:
-                            series = safefilename.safefilename(series.translate(ZEN2HAN_dict), table=safefilename.table2)
+                            series = sfn.safefilename(series.translate(ZEN2HAN_dict), table=sfn.table2)
                         if publisher:
-                            publisher = safefilename.safefilename(publisher.translate(ZEN2HAN_dict), table=safefilename.table2)
+                            publisher = sfn.safefilename(publisher.translate(ZEN2HAN_dict), table=sfn.table2)
                     #
                     if 'directory' in rename_info:
                         outdir = rename_info['directory'].format(author=author, authors=authors, title=title, series=series, series_index=series_index, publisher=publisher, sub_title=sub_title, org_title = org_title)

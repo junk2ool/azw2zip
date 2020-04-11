@@ -186,7 +186,16 @@ xmlns:enc="http://www.w3.org/2001/04/xmlenc#" xmlns:deenc="http://ns.adobe.com/d
         with open(pathof(fileout),'wb') as f:
             f.write(mimetype)
         nzinfo = ZipInfo('mimetype', compress_type=zipfile.ZIP_STORED)
+        #TTTTsstrwxrwxrwx0000000000ADVSHR
+        #^^^^____________________________ file type as explained above
+        #    ^^^_________________________ setuid, setgid, sticky
+        #       ^^^^^^^^^________________ permissions
+        #                ^^^^^^^^________ This is the "lower-middle byte" your post mentions
+        #                        ^^^^^^^^ DOS attribute bits
+        #    ‭0001100000000000000000000000‬
         nzinfo.external_attr = 0o600 << 16 # make this a normal file
+        #    ‭0000000000000000000000100000‬
+        nzinfo.external_attr |= 0x020
         self.outzip.writestr(nzinfo, mimetype)
         self.zipUpDir(self.outzip,self.k8dir,'META-INF')
         self.zipUpDir(self.outzip,self.k8dir,'OEBPS')

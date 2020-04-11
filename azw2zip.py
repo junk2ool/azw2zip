@@ -24,15 +24,17 @@ def redirect_stdout(target):
     yield
     sys.stdout = original
 
-from argv_utils import add_cp65001_codec, set_utf8_default_encoding, unicode_argv
+from compatibility_utils import add_cp65001_codec, unicode_argv
+from argv_utils import  set_utf8_default_encoding
 add_cp65001_codec()
 set_utf8_default_encoding()
 
 import DumpAZW6_v01
 import kindleunpack
-import kindleunpack.unipath
+import unipath
 
 from azw2zip_config import azw2zipConfig
+from azw2zip_nodedrm import azw2zip
 
 with redirect_stdout(open(os.devnull, 'w')):
     # AlfCrypto読み込み時の標準出力抑制
@@ -44,14 +46,15 @@ def usage(progname):
     print(u"  azw to zip or EPUB file.")
     print(u"  ")
     print(u"Usage:")
-    print(u"  {} [-z] [-e] [-f] [-t] [-c] [-d] <azw_indir> [outdir]".format(progname))
+    print(u"  {} [-zeftcod] <azw_indir> [outdir]".format(progname))
     print(u"  ")
     print(u"Options:")
     print(u"  -z        zipを出力(出力形式省略時のデフォルト)")
     print(u"  -e        epubを出力")
-    print(u"  -f        Imagesディレクトリを出力")
-    print(u"  -t        ファイル名の作品名にUpdated_Titleを使用する(calibreと同じ形式)")
+    print(u"  -f        画像ファイルをディレクトリに出力")
+    print(u"  -t        ファイル名の作品名にUpdated_Titleを使用する(Kindleと同じ作品名)")
     print(u"  -c        zipでの出力時に圧縮をする")
+    print(u"  -o        出力時に上書きをする(デフォルトは上書きしない)")
     print(u"  -d        デバッグモード(各ツールの標準出力表示＆作業ディレクトリ消さない)")
     print(u"  azw_indir 変換する書籍のディレクトリ(再帰的に読み込みます)")
     print(u"  outdir    出力先ディレクトリ(省略時は{}と同じディレクトリ)".format(progname))
@@ -63,14 +66,14 @@ def find_all_files(directory):
             yield os.path.join(root, file)
 
 def main(argv=unicode_argv()):
-    print(u"azw2zip v.{0:s}\nCopyright (C) 2020 junk2ool".format(__version__))
-    print(u"")
-
-    progname = os.path.basename(argv[0])
+    progname = os.path.splitext(os.path.basename(argv[0]))[0]
     azw2zip_dir = os.path.dirname(os.path.abspath(argv[0]))
 
+    print(u"{0:} v.{1:s}\nCopyright (C) 2020 junk2ool".format(progname, __version__))
+    print(u"")
+
     try:
-        opts, args = getopt.getopt(argv[1:], "tczefd")
+        opts, args = getopt.getopt(argv[1:], "tcomzefd")
     except getopt.GetoptError as err:
         print(str(err))
         usage(progname)
@@ -85,6 +88,8 @@ def main(argv=unicode_argv()):
 
     updated_title = cfg.isUpdatedTitle()
     compress_zip = cfg.isCompressZip()
+    over_write = cfg.isOverWrite()
+    output_thumb = cfg.isOutputThumb()
     output_zip = cfg.isOutputZip()
     output_epub = cfg.isOutputEpub()
     output_images = cfg.isOutputImages()
@@ -96,6 +101,10 @@ def main(argv=unicode_argv()):
             updated_title = True
         if o == "-c":
             compress_zip = True
+        if o == "-o":
+            over_write = True
+        if o == "-m":
+            output_thumb = True
         if o == "-z":
             output_zip = True
         if o == "-e":
@@ -106,7 +115,8 @@ def main(argv=unicode_argv()):
             debug_mode = True
     if not output_zip and not output_epub and not output_images:
         output_zip = True
-    cfg.setOptions(updated_title, compress_zip, output_zip, output_epub, output_images, debug_mode)
+    cfg.setOptions(updated_title, compress_zip, over_write, output_thumb, debug_mode)
+    cfg.setOutputFormats(output_zip, output_epub, output_images)
 
     # k4i ディレクトリはスクリプトのディレクトリ
     k4i_dir = cfg.getk4iDirectory()
@@ -157,58 +167,97 @@ def main(argv=unicode_argv()):
     cfg.setOutputDirectory(out_dir)
 
     print(u"出力ディレクトリ: {}".format(out_dir))
-    if not kindleunpack.unipath.exists(out_dir):
-        kindleunpack.unipath.mkdir(out_dir)
+    if not unipath.exists(out_dir):
+        unipath.mkdir(out_dir)
         print(u"出力ディレクトリ: 作成: {}".format(out_dir))
 
+    output_zip_org = output_zip
+    output_epub_org = output_epub
+    output_images_org = output_images
+
     # 処理ディレクトリのファイルを再帰走査
-    for azw_path in find_all_files(in_dir):
+    for azw_fpath in find_all_files(in_dir):
         # ファイルでなければスキップ
-        if not os.path.isfile(azw_path):
+        if not os.path.isfile(azw_fpath):
             continue
         # .azwファイルでなければスキップ
-        fext = os.path.splitext(azw_path)[1].upper()
+        fext = os.path.splitext(azw_fpath)[1].upper()
         if fext not in ['.AZW', '.AZW3']:
             continue
 
+        output_zip = output_zip_org
+        output_epub = output_epub_org
+        output_images = output_images_org
+        
+        output_format = [
+            [output_zip, u"zip", u".zip"],
+            [output_epub, u"epub", u".epub"],
+            [output_images, u"Images", u""],
+        ]
+
         print("")
-        azw_dir = os.path.dirname(azw_path)
+        azw_dir = os.path.dirname(azw_fpath)
         print(u"変換開始: {}".format(azw_dir))
+
+        # 上書きチェック
+        a2z = azw2zip()
+        a2z.load(azw_fpath, '', debug_mode)
+        fname_txt = cfg.makeOutputFileName(a2z.get_meta_data())
+        over_write_flag = over_write
+        if not over_write_flag:
+            for format in output_format:
+                if format[0]:
+                    output_fpath = os.path.join(out_dir, fname_txt + format[2])
+                    if unipath.exists(output_fpath):
+                        format[0] = False
+                        try:
+                            print(u" {}変換: パス: {}".format(format[1], output_fpath))
+                        except UnicodeEncodeError:
+                            print(u" {}変換: パス: {}".format(format[1], output_fpath.encode('cp932', 'replace').decode('cp932')))
+                    else:
+                        over_write_flag = True
+
+        if not over_write_flag:
+            # すべてパス
+            print(u"変換完了: {}".format(azw_dir))
+            continue
+
+        cfg.setOutputFormats(output_zip, output_epub, output_images)
 
         # 作業ディレクトリ作成
         # ランダムな8文字のディレクトリ名
         source = string.ascii_letters + string.digits
         random_str = ''.join([random.choice(source) for _ in range(8)])
         temp_dir = os.path.join(out_dir, "Temp_" + random_str)
-        book_fname = os.path.basename(os.path.dirname(azw_path))
+        book_fname = os.path.basename(os.path.dirname(azw_fpath))
         #temp_dir = os.path.join(out_dir, book_fname)
         print(u" 作業ディレクトリ: 作成: {}".format(temp_dir))
-        if not kindleunpack.unipath.exists(temp_dir):
-            kindleunpack.unipath.mkdir(temp_dir)
+        if not unipath.exists(temp_dir):
+            unipath.mkdir(temp_dir)
 
         # HD画像(resファイル)があれば展開
-        res_files = glob.glob(os.path.join(os.path.dirname(azw_path), '*.res'))
-        for res_path in res_files:
-            print(u"  HD画像展開: 開始: {}".format(res_path))
+        res_files = glob.glob(os.path.join(os.path.dirname(azw_fpath), '*.res'))
+        for res_fpath in res_files:
+            print(u"  HD画像展開: 開始: {}".format(res_fpath))
 
             if debug_mode:
-                DumpAZW6_v01.DumpAZW6(res_path, temp_dir)
+                DumpAZW6_v01.DumpAZW6(res_fpath, temp_dir)
             else:
                 with redirect_stdout(open(os.devnull, 'w')):
-                    DumpAZW6_v01.DumpAZW6(res_path, temp_dir)
+                    DumpAZW6_v01.DumpAZW6(res_fpath, temp_dir)
 
             print(u"  HD画像展開: 完了: {}".format(os.path.join(temp_dir, 'azw6_images')))
 
         # azwならDRM解除
         DeDRM_path = ""
         if fext in ['.AZW']:
-            print(u"  DRM解除: 開始: {}".format(azw_path))
+            print(u"  DRM解除: 開始: {}".format(azw_fpath))
 
             if debug_mode:
-                decryptk4mobi(azw_path, temp_dir, k4i_dir)
+                decryptk4mobi(azw_fpath, temp_dir, k4i_dir)
             else:
                 with redirect_stdout(open(os.devnull, 'w')):
-                    decryptk4mobi(azw_path, temp_dir, k4i_dir)
+                    decryptk4mobi(azw_fpath, temp_dir, k4i_dir)
 
             DeDRM_files = glob.glob(os.path.join(temp_dir, book_fname + '*.azw3'))
             if len(DeDRM_files) > 0:
@@ -217,15 +266,10 @@ def main(argv=unicode_argv()):
             else:
                 print(u"  DRM解除: 失敗:")
         elif fext in ['.AZW3']:
-            DeDRM_path = azw_path
+            DeDRM_path = azw_fpath
 
-        if DeDRM_path and kindleunpack.unipath.exists(DeDRM_path):
+        if DeDRM_path and unipath.exists(DeDRM_path):
             # 書籍変換
-            output_format = [
-                [output_zip, "zip", ".zip"],
-                [output_epub, "epub", ".epub"],
-                [output_images, "Images", ""],
-            ]
             print(u"  書籍変換: 開始: {}".format(DeDRM_path))
 
             #unpack_dir = os.path.join(temp_dir, os.path.splitext(os.path.basename(DeDRM_path))[0])
@@ -238,7 +282,7 @@ def main(argv=unicode_argv()):
 
             # 作成したファイル名を取得
             fname_path = os.path.join(temp_dir, "fname.txt")
-            if kindleunpack.unipath.exists(fname_path):
+            if unipath.exists(fname_path):
                 fname_file = codecs.open(fname_path, 'r', 'utf-8')
                 fname_txt = fname_file.readline().rstrip()
                 fname_file.close()
@@ -246,7 +290,7 @@ def main(argv=unicode_argv()):
                 for format in output_format:
                     if format[0]:
                         output_fpath = os.path.join(out_dir, fname_txt + format[2])
-                        if kindleunpack.unipath.exists(output_fpath):
+                        if unipath.exists(output_fpath):
                             try:
                                 print(u"  {}変換: 完了: {}".format(format[1], output_fpath))
                             except UnicodeEncodeError:

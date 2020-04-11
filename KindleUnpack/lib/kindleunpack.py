@@ -612,7 +612,7 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
 
     # make an epub-like structure of it all
     print("Creating an epub-like file")
-    files.makeEPUB(usedmap, obfuscate_data, uuid, azw2zip_cfg.isOutputEpub(), azw2zip_cfg.makeOutputFileName(mh), cover_offset)
+    files.makeEPUB(usedmap, obfuscate_data, uuid, azw2zip_cfg.isOutputEpub(), azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset)
 
 
 def processZip(mh, files):
@@ -624,7 +624,7 @@ def processZip(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeZip(azw2zip_cfg.makeOutputFileName(mh), cover_offset, azw2zip_cfg.isCompressZip())
+    files.makeZip(azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset, azw2zip_cfg.isCompressZip())
 
 def processImages(mh, files):
     # make a images
@@ -635,7 +635,7 @@ def processImages(mh, files):
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeImages(azw2zip_cfg.makeOutputFileName(mh), cover_offset)
+    files.makeImages(azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset)
 
 def processMobi7(mh, metadata, sect, files, rscnames):
     global DUMP
@@ -892,7 +892,7 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
 
         fname_txt = os.path.join(files.getOutputDir(), 'fname.txt')
         f = open(fname_txt, 'wb')
-        f.write(azw2zip_cfg.makeOutputFileName(mh).encode('utf-8'))
+        f.write(azw2zip_cfg.makeOutputFileName(mh.getMetaData()).encode('utf-8'))
         f.close()
 
     return
@@ -998,9 +998,11 @@ def usage(progname):
 
 
 def kindleunpack(infile, outdir, cfg):
+    global DUMP
     global azw2zip_cfg
 
     azw2zip_cfg = cfg
+    #DUMP = True
 
     try:
         print('Unpacking Book...')
