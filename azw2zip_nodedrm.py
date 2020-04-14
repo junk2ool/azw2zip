@@ -12,20 +12,10 @@ import binascii
 import zipfile
 import imghdr
 from collections import OrderedDict as dict_
-from datetime import datetime
-try:
-    import pytz
-except:
-    pass
+from datetime import datetime as dt
 
 __license__ = 'GPL v3'
 __version__ = u"0.1"
-
-sys.path.append(os.path.join(sys.path[0], 'KindleUnpack', 'lib'))
-
-from compatibility_utils import PY2, add_cp65001_codec, unicode_argv
-
-add_cp65001_codec()
 
 from azw2zip_config import azw2zipConfig
 
@@ -183,7 +173,7 @@ class azw_header:
         mobi_header_size, = struct.unpack_from(b'>L', mobi_header, 0x04)
 
         self.version, = struct.unpack_from(b'>L', mobi_header, 0x14)
-        if self.version != 8 and self.version != 6:
+        if self.version != 8 and self.version != 6 and self.version != 4:
             raise azw2zipException(u'invalid mobi version: {}'.format(self.version))
 
         self.codepage, = struct.unpack_from(b'>L', mobi_header, 0x0C)
@@ -349,6 +339,9 @@ class azw_header:
     def get_type(self):
         return self.type
 
+    def get_version(self):
+        return self.version
+
     def get_meta_data(self):
         return self.meta_data
 
@@ -399,6 +392,7 @@ class azw_file:
         self.sec_count = 0
         self.sec_count_offset = 0x4C
         self.sec_info_offset = 0x4E
+        self.print_replica = False
 
     def load(self, fpath, azw_header_data, debug = False):
         self.debug = debug
@@ -413,9 +407,17 @@ class azw_file:
         f = open(fpath, "rb")
         header = f.read(0x4E)
 
+        if header[:8] == b'\xEA\x44\x52\x4D\x49\x4F\x4E\xEE':
+            f.close()
+            #print(u'unspported DRM ebook: {}'.format(fpath))
+            #return 1
+            raise azw2zipException(u'unspported DRM ebook: {}'.format(fpath))
+
         ident = header[0x3C:0x3C+8]
         if not ident in [b'BOOKMOBI' ,b'RBINCONT']:
             f.close()
+            #print(u'invalid file format: {}'.format(ident))
+            #return 1
             raise azw2zipException(u'invalid file format: {}'.format(ident))
 
         self.sec_count, = struct.unpack_from(b'>H', header, self.sec_count_offset)
@@ -459,6 +461,8 @@ class azw_file:
                     if azw_header_data:
                         azw_header_data[header_index-1].set_sec_count(sec_offset)
                     azw_header_data.append(mobi_header)
+                    if mobi_header.get_version() == 4:
+                        self.print_replica = True
                     sec_offset = 0
                     continue
                 else:
@@ -482,6 +486,8 @@ class azw_file:
                     if azw_header_data:
                         azw_header_data[header_index-1].set_sec_count(sec_offset)
                     azw_header_data.append(cont_header)
+                    if cont_header.get_version() == 4:
+                        self.print_replica = True
                     sec_offset = 0
                     continue
             elif sec_type == b'CRES': #b'\x43\x52\x45\x53':
@@ -522,10 +528,15 @@ class azw_file:
                         if sec_type in [b"FLIS", b"FCIS", b"FDST", b"DATP", b"SRCS", b"PAGE", b"CMET", b"FONT", b"RESC", b"CDIC", b"HUFF", b"INDX", b"GESW", b"kind"]:
                             print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) {4:}".format(sec_index, sec_start, sec_size, sec_size, sec_type))
                         else:
+                            value = (binascii.hexlify(sec_type)).decode('ascii')
                             if sec_type.isalnum():
-                                print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) Unknown({4:})".format(sec_index, sec_start, sec_size, sec_size, sec_type))
+                                try:
+                                    print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) Unknown({4:})".format(sec_index, sec_start, sec_size, sec_size, sec_type))
+                                except UnicodeDecodeError:
+                                    print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) Unknown(0x{4:})".format(sec_index, sec_start, sec_size, sec_size, value))
+                                except UnicodeEncodeError:
+                                    print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) Unknown(0x{4:})".format(sec_index, sec_start, sec_size, sec_size, value))
                             else:
-                                value = (binascii.hexlify(sec_type)).decode('ascii')
                                 print(u"{0:4} 0x{1:08X} {2: >10,d}(0x{3:08X}) Unknown(0x{4:})".format(sec_index, sec_start, sec_size, sec_size, value))
             sec_offset += 1
 
@@ -550,27 +561,35 @@ class azw_file:
     def get_sec_count(self):
         return self.sec_count
 
+    def is_print_replica(self):
+        return self.print_replica
+
 class azw2zip:
 
     def __init__(self):
         self.debug = False
         self.image_data = []
         self.azw_header_data = []
+        self.print_replica = False
 
     def load(self, azw_fpath, res_fpath = u'', debug = False):
         self.debug = debug
 
         azw = azw_file()
         azw.load(azw_fpath, self.azw_header_data, self.debug)
+        self.print_replica = azw.is_print_replica()
 
         if res_fpath:
             res = azw_file()
             res.load(res_fpath, self.azw_header_data, self.debug)
-
+            if res.is_print_replica():
+                self.print_replica = True
 
         if self.debug:
             for header_info in self.azw_header_data:
                 header_info.dump()
+
+        return 0
 
     def get_image_info(self, offset):
         header = None
@@ -583,6 +602,9 @@ class azw2zip:
                 image_info = info.get_image_data().get(offset)
 
         return header, image_info
+
+    def is_print_replica(self):
+        return self.print_replica
 
     def get_meta_data(self, index = 0):
         return self.azw_header_data[index].get_meta_data()
@@ -665,15 +687,11 @@ class azw2zip:
         outzip = zipfile.ZipFile(out_fpath, 'w')
 
         # 日付生成
-        date_time = datetime.now()
+        date_time = dt.now()
         published = meta_data.get('Published')[0]
         if published:
-            date_time = datetime.strptime(published, '%Y-%m-%d')
-        try:
-            date_time = date_time.astimezone(pytz.timezone('UTC')).timetuple()
-        except NameError:
-            date_time = date_time.timetuple()
-        file_date_time = date_time
+            date_time = dt.strptime(published, '%Y-%m-%d')
+        file_date_time = date_time.timetuple()
 
         self.open_azw_header()
 
@@ -737,12 +755,13 @@ def usage(progname):
     print(u"  azw to zip file.")
     print(u"  ")
     print(u"Usage:")
-    print(u"  {} [-zftcomd] <azw_indir> [outdir]".format(progname))
+    print(u"  {} [-zftscomd] <azw_indir> [outdir]".format(progname))
     print(u"  ")
     print(u"Options:")
     print(u"  -z        zipを出力(出力形式省略時のデフォルト)")
     print(u"  -f        画像ファイルをディレクトリに出力")
     print(u"  -t        ファイル名の作品名にUpdated_Titleを使用する(Kindleと同じ作品名)")
+    print(u"  -s        作者名を昇順でソートする")
     print(u"  -c        zipでの出力時に圧縮をする")
     print(u"  -o        出力時に上書きをする(デフォルトは上書きしない)")
     print(u"  -m        サムネイル画像を出力する")
@@ -756,7 +775,7 @@ def find_all_files(directory):
         for file in files:
             yield os.path.join(root, file)
 
-def main(argv=unicode_argv()):
+def main(argv=sys.argv):
     progname = os.path.splitext(os.path.basename(argv[0]))[0]
     azw2zip_dir = os.path.dirname(os.path.abspath(argv[0]))
 
@@ -764,7 +783,7 @@ def main(argv=unicode_argv()):
     print(u"")
 
     try:
-        opts, args = getopt.getopt(argv[1:], "zftcomd")
+        opts, args = getopt.getopt(argv[1:], "zftscomd")
     except getopt.GetoptError as err:
         print(str(err))
         usage(progname)
@@ -782,6 +801,7 @@ def main(argv=unicode_argv()):
         cfg.load(os.path.join(azw2zip_dir, u'azw2zip.json'))
 
     updated_title = cfg.isUpdatedTitle()
+    authors_sort = cfg.isAuthorsSort()
     compress_zip = cfg.isCompressZip()
     over_write = cfg.isOverWrite()
     output_thumb = cfg.isOutputThumb()
@@ -794,6 +814,8 @@ def main(argv=unicode_argv()):
     for o, a in opts:
         if o == "-t":
             updated_title = True
+        if o == "-s":
+            authors_sort = True
         if o == "-c":
             compress_zip = True
         if o == "-o":
@@ -808,8 +830,8 @@ def main(argv=unicode_argv()):
             debug_mode = True
     if not output_zip and not output_images:
         output_zip = True
-    cfg.setOptions(updated_title, compress_zip, over_write, output_thumb, debug_mode)
-    cfg.setOutputFormats(output_zip, False, output_images)
+    cfg.setOptions(updated_title, authors_sort, compress_zip, over_write, output_thumb, debug_mode)
+    cfg.setOutputFormats(output_zip, False, output_images, False)
     
     # 変換ディレクトリ
     in_dir = args[0]
@@ -847,7 +869,7 @@ def main(argv=unicode_argv()):
             continue
         # .azwファイルでなければスキップ
         fext = os.path.splitext(azw_fpath)[1].upper()
-        if fext not in ['.AZW', '.AZW3', '.MOBI']:
+        if fext not in ['.AZW', '.AZW3', '.AZW4', '.MOBI']:
             continue
 
         print(u"")
@@ -863,7 +885,14 @@ def main(argv=unicode_argv()):
         print(u" 書籍変換: 開始: {}".format(azw_fpath))
 
         # azw(+res)読み込み
-        a2z.load(azw_fpath, res_fpath, debug_mode)
+        try:
+            if a2z.load(azw_fpath, res_fpath, debug_mode) != 0:
+                continue
+        except azw2zipException as e:
+            print(str(e))
+            continue
+
+        cfg.setPrintReplica(a2z.is_print_replica())
 
         a2z.make_output_image_info(cfg)
 

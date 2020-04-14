@@ -11,7 +11,14 @@ from collections import OrderedDict
 import pprint
 import re
 
+import requests
+try:
+    from urllib.parse import unquote, unquote_plus
+except ImportError:
+    from urllib import unquote, unquote_plus
+
 PY2 = sys.version_info[0] == 2
+PY3 = sys.version_info[0] == 3
 
 if PY2:
     from HTMLParser import HTMLParser
@@ -37,9 +44,14 @@ class azw2zipConfig:
         self.output_zip = False
         self.output_epub = False
         self.output_images = False
+        self.output_pdf = False
         self.outdir = ''
         self.k4idir = ''
+        self.tmpdir = ''
         self.authors_sep = u' & '
+        self.authors_sort = False
+        self.authors_others = u'外{}名'
+        self.authors_others_threshold = 5
         self.cover_fname = u"cover{num1:0>5}.{ext}"
         self.image_fname = u"image{num1:0>5}.{ext}"
         self.thumb_fname = u"thumb{num1:0>5}.{ext}"
@@ -47,6 +59,9 @@ class azw2zipConfig:
         #self.image_fname = u'image{image_num1:0>3}.{ext}'
         #self.thumb_fname = u'thumbnail.{ext}'
         self.debug_mode = False
+        #
+        self.metadata = OrderedDict()
+        self.print_replica = False
 
     def load(self, filename):
         self.filename = filename
@@ -72,12 +87,20 @@ class azw2zipConfig:
                         self.output_epub = True
                     if 'output_images' in key_info and key_info['output_images']:
                         self.output_images = True
+                    if 'output_pdf' in key_info and key_info['output_pdf']:
+                        self.output_pdf = True
                     if 'output_dir' in key_info:
                         self.outdir = key_info['output_dir']
                     if 'k4i_dir' in key_info:
                         self.k4idir = key_info['k4i_dir']
                     if 'authors_sep' in key_info:
                         self.authors_sep = key_info['authors_sep']
+                    if 'authors_sort' in key_info and key_info['authors_sort']:
+                        self.authors_sort = True
+                    if 'authors_others' in key_info:
+                        self.authors_others = key_info['authors_others']
+                    if 'authors_others_threshold' in key_info:
+                        self.authors_others_threshold = int(key_info['authors_others_threshold'])
                     if 'cover_fname' in key_info:
                         self.cover_fname = key_info['cover_fname']
                     if 'image_fname' in key_info:
@@ -100,6 +123,9 @@ class azw2zipConfig:
     def isUpdatedTitle(self):
         return self.updated_title
 
+    def isAuthorsSort(self):
+        return self.authors_sort
+
     def isCompressZip(self):
         return self.compress_zip
 
@@ -118,20 +144,29 @@ class azw2zipConfig:
     def isOutputImages(self):
         return self.output_images
 
+    def isOutputPdf(self):
+        return self.output_pdf
+
     def isDebugMode(self):
         return self.debug_mode
 
-    def setOptions(self, updated_title, compress_zip, over_write, output_thumb, debug_mode):
+    def setPrintReplica(self, print_replica):
+        self.print_replica = print_replica
+        self.metadata.clear()
+
+    def setOptions(self, updated_title, authors_sort, compress_zip, over_write, output_thumb, debug_mode):
         self.updated_title = updated_title
+        self.authors_sort = authors_sort
         self.compress_zip = compress_zip
         self.over_write = over_write
         self.output_thumb = output_thumb
         self.debug_mode = debug_mode
 
-    def setOutputFormats(self, output_zip, output_epub, output_images):
+    def setOutputFormats(self, output_zip, output_epub, output_images, output_pdf):
         self.output_zip = output_zip
         self.output_epub = output_epub
         self.output_images = output_images
+        self.output_pdf = output_pdf
 
     def getOutputDirectory(self):
         return self.outdir
@@ -148,14 +183,68 @@ class azw2zipConfig:
     def setOutputDirectory(self, outdir):
         self.outdir = outdir
 
+    def setTempDirectory(self, tmpdir):
+        self.tmpdir = tmpdir
+
+    def getAmazonMetaData(self, asin):
+        url = 'https://www.amazon.co.jp/dp/' + asin
+        #print(url)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36",
+            }
+        get_url_info = requests.get(url, headers = headers)
+
+        if self.debug_mode and self.tmpdir and get_url_info.text:
+            with open(os.path.join(self.tmpdir, asin + ".html"), "wb") as f:
+                if PY2:
+                    f.write(get_url_info.text)
+                else:
+                    f.write(get_url_info.text.encode('utf-8'))
+
+        #get_url_info.raise_for_status()
+        if get_url_info.status_code != 200:
+            return
+
+        title_match = re.search(r'<span id=".*?roductTitle".+?>\s+(.+?)\s+?</span>', get_url_info.text)
+        if (title_match):
+            #print(title_match.group(1))
+            del self.metadata['Title']
+            del self.metadata['Updated_Title']
+            self.metadata['Title'] = [title_match.group(1)]
+            self.metadata['Updated_Title'] = [title_match.group(1)]
+
+        author_match = re.search(r'field-author=(.+?)&amp;', get_url_info.text)
+        if author_match:
+            del self.metadata['Creator']
+        for m in re.findall(r'field-author=(.+?)&amp;', get_url_info.text):
+            #print(m)
+            author = u''
+            if PY2:
+                author = unquote_plus(m.encode('ascii')).decode('utf-8')
+            else:
+                author = unquote_plus(m)
+            #print(author)
+            if 'Creator' not in self.metadata:
+                self.metadata['Creator'] = [author]
+            else:
+                self.metadata['Creator'].append(author)
+
+        publisher_match = re.search(u'<li><b>出版社:</b>\s+?(.+?)\s+?\(.+?\)</li>', get_url_info.text)
+        if (publisher_match):
+            #print(publisher_match.group(1))
+            del self.metadata['Publisher']
+            self.metadata['Publisher'] = [publisher_match.group(1)]
+
     def makeAuthors(self, author):
         #return self.author_seps.join(author)
-        authors = ''
+        if self.authors_sort:
+            author.sort()
+        authors = u''
         for index in range(len(author)):
             if index != 0:
                 authors += self.authors_sep
-            if index > 4:
-                authors += u'外{}名'.format(len(author)-5)
+            if self.authors_others_threshold > 0 and index >= self.authors_others_threshold:
+                authors += self.authors_others.format(len(author) - self.authors_others_threshold)
                 break
             #authors += _h.unescape(unicode_str(author[index]))
             #authors += sfn.safefilename(_h.unescape(unicode_str(author[index])), table=sfn.table2)
@@ -163,11 +252,19 @@ class azw2zipConfig:
         return authors
 
     def makeOutputFileName(self, metadata):
+        title = metadata.get('Title')[0]
+        #
+        if self.print_replica and title[:4] == u'tmp-' and metadata.get('ASIN')[0]:
+            if not self.metadata.get('Title'):
+                self.metadata = metadata.copy()
+                self.getAmazonMetaData(self.metadata.get('ASIN')[0])
+            metadata = self.metadata.copy()
+            title = metadata.get('Title')[0]
+            #print(metadata)
+
         # Title
         if self.updated_title and 'Updated_Title' in metadata:
             title = metadata.get('Updated_Title')[0]
-        else:
-            title = metadata.get('Title')[0]
         title = _h.unescape(title)
         # Creator
         author = []

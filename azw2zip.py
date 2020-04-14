@@ -35,6 +35,7 @@ import unipath
 
 from azw2zip_config import azw2zipConfig
 from azw2zip_nodedrm import azw2zip
+from azw2zip_nodedrm import azw2zipException
 
 with redirect_stdout(open(os.devnull, 'w')):
     # AlfCrypto読み込み時の標準出力抑制
@@ -46,13 +47,15 @@ def usage(progname):
     print(u"  azw to zip or EPUB file.")
     print(u"  ")
     print(u"Usage:")
-    print(u"  {} [-zeftcod] <azw_indir> [outdir]".format(progname))
+    print(u"  {} [-zeftscod] <azw_indir> [outdir]".format(progname))
     print(u"  ")
     print(u"Options:")
     print(u"  -z        zipを出力(出力形式省略時のデフォルト)")
     print(u"  -e        epubを出力")
     print(u"  -f        画像ファイルをディレクトリに出力")
+    print(u"  -p        pdfを出力(PrintReplica書籍の場合のみ)")
     print(u"  -t        ファイル名の作品名にUpdated_Titleを使用する(Kindleと同じ作品名)")
+    print(u"  -s        作者名を昇順でソートする")
     print(u"  -c        zipでの出力時に圧縮をする")
     print(u"  -o        出力時に上書きをする(デフォルトは上書きしない)")
     print(u"  -d        デバッグモード(各ツールの標準出力表示＆作業ディレクトリ消さない)")
@@ -73,7 +76,7 @@ def main(argv=unicode_argv()):
     print(u"")
 
     try:
-        opts, args = getopt.getopt(argv[1:], "tcomzefd")
+        opts, args = getopt.getopt(argv[1:], "zefptscomd")
     except getopt.GetoptError as err:
         print(str(err))
         usage(progname)
@@ -87,18 +90,22 @@ def main(argv=unicode_argv()):
     cfg.load(os.path.join(azw2zip_dir, 'azw2zip.json'))
 
     updated_title = cfg.isUpdatedTitle()
+    authors_sort = cfg.isAuthorsSort()
     compress_zip = cfg.isCompressZip()
     over_write = cfg.isOverWrite()
     output_thumb = cfg.isOutputThumb()
     output_zip = cfg.isOutputZip()
     output_epub = cfg.isOutputEpub()
     output_images = cfg.isOutputImages()
+    output_pdf = cfg.isOutputPdf()
     debug_mode = cfg.isDebugMode()
 
     # オプション解析
     for o, a in opts:
         if o == "-t":
             updated_title = True
+        if o == "-s":
+            authors_sort = True
         if o == "-c":
             compress_zip = True
         if o == "-o":
@@ -111,12 +118,14 @@ def main(argv=unicode_argv()):
             output_epub = True
         if o == "-f":
             output_images = True
+        if o == "-p":
+            output_pdf = True
         if o == "-d":
             debug_mode = True
-    if not output_zip and not output_epub and not output_images:
+    if not output_zip and not output_epub and not output_images and not output_pdf:
         output_zip = True
-    cfg.setOptions(updated_title, compress_zip, over_write, output_thumb, debug_mode)
-    cfg.setOutputFormats(output_zip, output_epub, output_images)
+    cfg.setOptions(updated_title, authors_sort, compress_zip, over_write, output_thumb, debug_mode)
+    cfg.setOutputFormats(output_zip, output_epub, output_images, output_pdf)
 
     # k4i ディレクトリはスクリプトのディレクトリ
     k4i_dir = cfg.getk4iDirectory()
@@ -174,6 +183,7 @@ def main(argv=unicode_argv()):
     output_zip_org = output_zip
     output_epub_org = output_epub
     output_images_org = output_images
+    output_pdf_org = output_pdf
 
     # 処理ディレクトリのファイルを再帰走査
     for azw_fpath in find_all_files(in_dir):
@@ -188,11 +198,13 @@ def main(argv=unicode_argv()):
         output_zip = output_zip_org
         output_epub = output_epub_org
         output_images = output_images_org
+        output_pdf = output_pdf_org
         
         output_format = [
             [output_zip, u"zip", u".zip"],
             [output_epub, u"epub", u".epub"],
             [output_images, u"Images", u""],
+            [output_pdf, u"pdf", u".*.pdf"],
         ]
 
         print("")
@@ -201,19 +213,28 @@ def main(argv=unicode_argv()):
 
         # 上書きチェック
         a2z = azw2zip()
-        a2z.load(azw_fpath, '', debug_mode)
-        fname_txt = cfg.makeOutputFileName(a2z.get_meta_data())
         over_write_flag = over_write
+        try:
+            if a2z.load(azw_fpath, '', debug_mode) != 0:
+                over_write_flag = True
+        except azw2zipException as e:
+            print(str(e))
+            over_write_flag = True
+
+        cfg.setPrintReplica(a2z.is_print_replica())
+
         if not over_write_flag:
+            fname_txt = cfg.makeOutputFileName(a2z.get_meta_data())
             for format in output_format:
                 if format[0]:
                     output_fpath = os.path.join(out_dir, fname_txt + format[2])
-                    if unipath.exists(output_fpath):
+                    output_files = glob.glob(output_fpath.replace('[', '[[]'))
+                    if (len(output_files)):
                         format[0] = False
                         try:
-                            print(u" {}変換: パス: {}".format(format[1], output_fpath))
+                            print(u" {}変換: パス: {}".format(format[1], output_files[0]))
                         except UnicodeEncodeError:
-                            print(u" {}変換: パス: {}".format(format[1], output_fpath.encode('cp932', 'replace').decode('cp932')))
+                            print(u" {}変換: パス: {}".format(format[1], output_files[0].encode('cp932', 'replace').decode('cp932')))
                     else:
                         over_write_flag = True
 
@@ -222,7 +243,7 @@ def main(argv=unicode_argv()):
             print(u"変換完了: {}".format(azw_dir))
             continue
 
-        cfg.setOutputFormats(output_zip, output_epub, output_images)
+        cfg.setOutputFormats(output_zip, output_epub, output_images, output_pdf)
 
         # 作業ディレクトリ作成
         # ランダムな8文字のディレクトリ名
@@ -234,6 +255,8 @@ def main(argv=unicode_argv()):
         print(u" 作業ディレクトリ: 作成: {}".format(temp_dir))
         if not unipath.exists(temp_dir):
             unipath.mkdir(temp_dir)
+
+        cfg.setTempDirectory(temp_dir)
 
         # HD画像(resファイル)があれば展開
         res_files = glob.glob(os.path.join(os.path.dirname(azw_fpath), '*.res'))
@@ -259,7 +282,7 @@ def main(argv=unicode_argv()):
                 with redirect_stdout(open(os.devnull, 'w')):
                     decryptk4mobi(azw_fpath, temp_dir, k4i_dir)
 
-            DeDRM_files = glob.glob(os.path.join(temp_dir, book_fname + '*.azw3'))
+            DeDRM_files = glob.glob(os.path.join(temp_dir, book_fname + '*.azw?'))
             if len(DeDRM_files) > 0:
                 DeDRM_path = DeDRM_files[0]
                 print(u"  DRM解除: 完了: {}".format(DeDRM_path))
@@ -290,11 +313,12 @@ def main(argv=unicode_argv()):
                 for format in output_format:
                     if format[0]:
                         output_fpath = os.path.join(out_dir, fname_txt + format[2])
-                        if unipath.exists(output_fpath):
+                        output_files = glob.glob(output_fpath.replace('[', '[[]'))
+                        if (len(output_files)):
                             try:
-                                print(u"  {}変換: 完了: {}".format(format[1], output_fpath))
+                                print(u"  {}変換: 完了: {}".format(format[1], output_files[0]))
                             except UnicodeEncodeError:
-                                print(u"  {}変換: 完了: {}".format(format[1], output_fpath.encode('cp932', 'replace').decode('cp932')))
+                                print(u"  {}変換: 完了: {}".format(format[1], output_files[0].encode('cp932', 'replace').decode('cp932')))
             else:
                 print(u"  書籍変換: 失敗:")
         else:

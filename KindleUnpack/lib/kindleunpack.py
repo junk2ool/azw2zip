@@ -454,12 +454,18 @@ def processPrintReplica(metadata, files, rscnames, mh):
             for j in range(sectionCount):
                 sectionOffset, sectionLength, = struct.unpack_from(b'>LL', rawML, tableIndexOffset)
                 tableIndexOffset += 8
+                pdf_fpath = u''
                 if j == 0:
+                    if azw2zip_cfg.isOutputPdf():
+                        pdf_fpath = os.path.join(files.outdir, '..', azw2zip_cfg.makeOutputFileName(metadata) + ('.%03d.pdf' % (i+1)))
                     entryName = os.path.join(files.outdir, files.getInputFileBasename() + ('.%03d.pdf' % (i+1)))
                 else:
                     entryName = os.path.join(files.outdir, files.getInputFileBasename() + ('.%03d.%03d.data' % ((i+1),j)))
                 with open(pathof(entryName), 'wb') as f:
                     f.write(rawML[sectionOffset:(sectionOffset+sectionLength)])
+                if pdf_fpath:
+                    with open(pathof(pdf_fpath), 'wb') as f:
+                        f.write(rawML[sectionOffset:(sectionOffset+sectionLength)])
     except Exception as e:
         print('Error processing Print Replica: ' + str(e))
 
@@ -615,27 +621,27 @@ def processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfus
     files.makeEPUB(usedmap, obfuscate_data, uuid, azw2zip_cfg.isOutputEpub(), azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset)
 
 
-def processZip(mh, files):
+def processZip(mh, metadata, files):
     # make a zip
     print("Creating a Zip file")
     
     # 表紙の番号取得
-    cover_offset = int(mh.metadata.get('CoverOffset', ['-1'])[0])
+    cover_offset = int(metadata.get('CoverOffset', ['-1'])[0])
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeZip(azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset, azw2zip_cfg.isCompressZip())
+    files.makeZip(azw2zip_cfg.makeOutputFileName(metadata), cover_offset, azw2zip_cfg.isCompressZip())
 
-def processImages(mh, files):
+def processImages(mh, metadata, files):
     # make a images
     print("Creating an Images directory")
     
     # 表紙の番号取得
-    cover_offset = int(mh.metadata.get('CoverOffset', ['-1'])[0])
+    cover_offset = int(metadata.get('CoverOffset', ['-1'])[0])
     if not CREATE_COVER_PAGE:
         cover_offset = None
 
-    files.makeImages(azw2zip_cfg.makeOutputFileName(mh.getMetaData()), cover_offset)
+    files.makeImages(azw2zip_cfg.makeOutputFileName(metadata), cover_offset)
 
 def processMobi7(mh, metadata, sect, files, rscnames):
     global DUMP
@@ -867,32 +873,32 @@ def process_all_mobi_headers(files, apnxfile, sect, mhlst, K8Boundary, k8only=Fa
                 rscnames, rsc_ptr  = processImage(i, files, rscnames, sect, data, beg, rsc_ptr, cover_offset)
         # done unpacking resources
 
+        metadata_bak = metadata.copy()
         # Print Replica
         if mh.isPrintReplica() and not k8only:
             processPrintReplica(metadata, files, rscnames, mh)
-            continue
+        else:
+            # KF8 (Mobi 8)
+            if mh.isK8():
+                processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfuscate_data, apnxfile, epubver)
 
-        # KF8 (Mobi 8)
-        if mh.isK8():
-            processMobi8(mh, metadata, sect, files, rscnames, pagemapproc, k8resc, obfuscate_data, apnxfile, epubver)
+            # Old Mobi (Mobi 7)
+            elif not k8only:
+                processMobi7(mh, metadata, sect, files, rscnames)
 
-        # Old Mobi (Mobi 7)
-        elif not k8only:
-            processMobi7(mh, metadata, sect, files, rscnames)
-
-        # process any remaining unknown sections of the palm file
-        processUnknownSections(mh, sect, files, K8Boundary)
+            # process any remaining unknown sections of the palm file
+            processUnknownSections(mh, sect, files, K8Boundary)
 
         # Zip
         if azw2zip_cfg.isOutputZip():
-            processZip(mh, files)
+            processZip(mh, metadata_bak, files)
 
         if azw2zip_cfg.isOutputImages():
-            processImages(mh, files)
+            processImages(mh, metadata_bak, files)
 
         fname_txt = os.path.join(files.getOutputDir(), 'fname.txt')
         f = open(fname_txt, 'wb')
-        f.write(azw2zip_cfg.makeOutputFileName(mh.getMetaData()).encode('utf-8'))
+        f.write(azw2zip_cfg.makeOutputFileName(metadata_bak).encode('utf-8'))
         f.close()
 
     return
