@@ -418,7 +418,7 @@ class azw_file:
             f.close()
             #print(u'invalid file format: {}'.format(ident))
             #return 1
-            raise azw2zipException(u'invalid file format: {}'.format(ident))
+            raise azw2zipException(u'invalid file format: 0x{}'.format((binascii.hexlify(ident)).decode('ascii')))
 
         self.sec_count, = struct.unpack_from(b'>H', header, self.sec_count_offset)
 
