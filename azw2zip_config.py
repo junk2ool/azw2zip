@@ -11,7 +11,11 @@ from collections import OrderedDict
 import pprint
 import re
 
-import requests
+try:
+    import urllib2 as ul
+except ImportError:
+    import urllib.request as ul
+
 try:
     from urllib.parse import unquote, unquote_plus
 except ImportError:
@@ -189,23 +193,22 @@ class azw2zipConfig:
     def getAmazonMetaData(self, asin):
         url = 'https://www.amazon.co.jp/dp/' + asin
         #print(url)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36",
-            }
-        get_url_info = requests.get(url, headers = headers)
+        request = ul.Request(url)
+        request.add_header('User-agent', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36')
+        response = ul.urlopen(request)
 
-        if self.debug_mode and self.tmpdir and get_url_info.text:
+        html_data = response.read()
+        if self.debug_mode and self.tmpdir and html_data:
             with open(os.path.join(self.tmpdir, asin + ".html"), "wb") as f:
-                if PY2:
-                    f.write(get_url_info.text)
-                else:
-                    f.write(get_url_info.text.encode('utf-8'))
+                f.write(html_data)
 
-        #get_url_info.raise_for_status()
-        if get_url_info.status_code != 200:
+        if response.getcode() != 200:
             return
+        
+        if type(html_data) is bytes:
+            html_data = html_data.decode('utf-8')
 
-        title_match = re.search(r'<span id=".*?roductTitle".+?>\s+(.+?)\s+?</span>', get_url_info.text)
+        title_match = re.search(r'<span id=".*?roductTitle".+?>\s+(.+?)\s+?</span>', html_data)
         if (title_match):
             #print(title_match.group(1))
             del self.metadata['Title']
@@ -213,10 +216,10 @@ class azw2zipConfig:
             self.metadata['Title'] = [title_match.group(1)]
             self.metadata['Updated_Title'] = [title_match.group(1)]
 
-        author_match = re.search(r'field-author=(.+?)&amp;', get_url_info.text)
+        author_match = re.search(r'field-author=(.+?)&amp;', html_data)
         if author_match:
             del self.metadata['Creator']
-        for m in re.findall(r'field-author=(.+?)&amp;', get_url_info.text):
+        for m in re.findall(r'field-author=(.+?)&amp;', html_data):
             #print(m)
             author = u''
             if PY2:
@@ -229,7 +232,7 @@ class azw2zipConfig:
             else:
                 self.metadata['Creator'].append(author)
 
-        publisher_match = re.search(u'<li><b>出版社:</b>\s+?(.+?)\s+?\(.+?\)</li>', get_url_info.text)
+        publisher_match = re.search(u'<li><b>出版社:</b>\s+?(.+?)\s+?\(.+?\)</li>', html_data)
         if (publisher_match):
             #print(publisher_match.group(1))
             del self.metadata['Publisher']
@@ -255,12 +258,16 @@ class azw2zipConfig:
         title = metadata.get('Title')[0]
         #
         if self.print_replica and title[:4] == u'tmp-' and metadata.get('ASIN')[0]:
-            if not self.metadata.get('Title'):
-                self.metadata = metadata.copy()
-                self.getAmazonMetaData(self.metadata.get('ASIN')[0])
-            metadata = self.metadata.copy()
-            title = metadata.get('Title')[0]
-            #print(metadata)
+            try:
+                if not self.metadata.get('Title'):
+                    self.metadata = metadata.copy()
+                    self.getAmazonMetaData(self.metadata.get('ASIN')[0])
+                metadata = self.metadata.copy()
+                title = metadata.get('Title')[0]
+                #print(metadata)
+            except Exception as e:
+                print(str(e))
+                pass
 
         # Title
         if self.updated_title and 'Updated_Title' in metadata:

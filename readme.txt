@@ -148,7 +148,7 @@ python setup.py py2exe
 GNU General Public License v3.0
 
 ■履歴
-2020/04/14 v.0.3
+2020/04/16 v.0.3
 ・Python3での実行に対応。
 ・-zでzipを出力できるように追加。
 ・-fで画像ファイルをディレクトリに出力出来るように追加。
