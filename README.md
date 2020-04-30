@@ -1,6 +1,7 @@
 # azw2zip
 
 KindleUnpackとDeDRM、DumpAZW6を改造してKindleの電子書籍(azw/azw3(あればresも))を画像のみの無圧縮zipかepubに変換するようにしたもの。  
+zipにした場合は画像ファイルのみが格納されます。(小説等テキストベースの書籍の場合は表紙と挿絵のみ)  
 azwはWindowsならキーファイル(k4i)がなければ作り、変換します。(多分Macもだけど環境がないので未確認)  
 Linux(WSLも)では各自キーファイル(k4i)を別途用意してこれと同じディレクトリにおいてください。  
 Python 2.7かPython 3.8にpycryptoを入れたものが動く環境が必要です。  
@@ -11,7 +12,7 @@ Kindleは1.24以前のものをインストールした環境でないとダメ�
 * pycrypto
 
 ## Usage
-```
+```bash
 python azw2zip.py -z X:\My Kindle Content X:\Comic
 ```
 詳しくはreadme.txtを参照。
@@ -31,7 +32,7 @@ p2exeをインストールする。
  * azw2zip/KindleUnpack/lib/\*.py (\_\_init\_\_.py除く)  
 
 上記の\*.pyを同じディレクトリに入れる。  
-```
+```bash
 python setup.py py2exe  
 ```
 を実行する。

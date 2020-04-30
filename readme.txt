@@ -5,6 +5,7 @@
 
 ■概要
 KindleUnpackとDeDRM、DumpAZW6を改造してKindleの電子書籍(azw/azw3(あればresも))を画像のみの無圧縮zipかepubに変換するようにしたもの。
+zipにした場合は画像ファイルのみが格納されます。(小説等テキストベースの書籍の場合は表紙と挿絵のみ)
 azwはWindowsならキーファイル(k4i)がなければ作り、変換します。(多分Macもだけど環境がないので未確認)
 Linux(WSLも)では各自キーファイル(k4i)を別途用意してこれと同じディレクトリにおいてください。
 Python 2.7かPython 3.8にpycryptoを入れたものが動く環境が必要です。
@@ -140,15 +141,19 @@ azw2zip/KindleUnpack/lib/*.py (__init__.py除く)
 python setup.py py2exe
 を実行する。
 
+■その他
+PrintReplica書籍で作品名・作者名が正常でないものはamazon.co.jpより取得します。
+
 ■ToDo
 ・DeDRMのPython3対応は適当なので漏れがありそう。
 ・zip化の脱DeDRM+KindleUnpack。
+・上書きチェックにDeDRMを使用しないので対応していないファイルがあると思う。
 
 ■ライセンス
 GNU General Public License v3.0
 
 ■履歴
-2020/04/16 v.0.3
+2020/04/30 v.0.3
 ・Python3での実行に対応。
 ・-zでzipを出力できるように追加。
 ・-fで画像ファイルをディレクトリに出力出来るように追加。
